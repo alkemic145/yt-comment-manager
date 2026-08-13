@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  /* Surfaces */
+  --color-ink-950: #0b0d12; /* page background */
+  --color-ink-900: #12151c; /* card / section surface */
+  --color-ink-800: #1c2029; /* raised surface, borders */
+
+  /* Text */
+  --color-paper-50: #edeef0; /* primary text */
+  --color-fog-400: #8b92a3; /* muted / secondary text */
+
+  /* Accents */
+  --color-signal-500: #ff5a47; /* action needed - replies, alerts */
+  --color-signal-400: #ff7c6c;
+  --color-calm-400: #4fd1c5; /* resolved / organized state */
+  --color-calm-300: #7bdcd3;
+}
+
+@theme inline {
+  --color-ink-950: var(--color-ink-950);
+  --color-ink-900: var(--color-ink-900);
+  --color-ink-800: var(--color-ink-800);
+  --color-paper-50: var(--color-paper-50);
+  --color-fog-400: var(--color-fog-400);
+  --color-signal-500: var(--color-signal-500);
+  --color-signal-400: var(--color-signal-400);
+  --color-calm-400: var(--color-calm-400);
+  --color-calm-300: var(--color-calm-300);
+
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background: var(--color-ink-950);
+  color: var(--color-paper-50);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
