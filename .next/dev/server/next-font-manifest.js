@@ -1,0 +1,1 @@
+self.__NEXT_FONT_MANIFEST="{\n  \"app\": {\n    \"[project]/src/app/page\": [\n      \"static/media/SpaceGrotesk_Variable-s.p.3bk34495xijiu.ttf\",\n      \"static/media/Inter_Variable-s.p.2la4dbfrngu72.ttf\",\n      \"static/media/JetBrainsMono_Variable-s.p.2zi1ojajef2ra.ttf\"\n    ]\n  },\n  \"appUsingSizeAdjust\": true,\n  \"pages\": {},\n  \"pagesUsingSizeAdjust\": false\n}"
