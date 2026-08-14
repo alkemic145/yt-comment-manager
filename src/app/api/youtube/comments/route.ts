@@ -1,24 +1,32 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/app-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const supabase = createSupabaseServerClient();
 
-    // Get the latest YouTube connection
     const { data: connection, error: dbError } = await supabase
       .from("youtube_connections")
       .select(
-        "channel_id, channel_title, access_token, refresh_token, expires_at"
+        "id, channel_id, channel_title, access_token, refresh_token, expires_at"
       )
+      .eq("user_id", user.id)
       .order("id", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (dbError || !connection) {
-      console.error("Supabase error:", dbError);
-
       return NextResponse.json(
         {
           success: false,
@@ -28,32 +36,55 @@ export async function GET() {
       );
     }
 
-    // Create Google OAuth client
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_REDIRECT_URI
     );
 
-    // Give Google the saved credentials
     oauth2Client.setCredentials({
       access_token: connection.access_token,
       refresh_token: connection.refresh_token,
+      expiry_date: connection.expires_at
+        ? new Date(connection.expires_at).getTime()
+        : undefined,
     });
 
-    // Create YouTube API client
     const youtube = google.youtube({
       version: "v3",
       auth: oauth2Client,
     });
 
-    // Fetch comments
     const response = await youtube.commentThreads.list({
       part: ["snippet", "replies"],
       allThreadsRelatedToChannelId: connection.channel_id,
       maxResults: 20,
       order: "time",
     });
+
+    const refreshedCredentials = oauth2Client.credentials;
+    const accessTokenChanged =
+      refreshedCredentials.access_token &&
+      refreshedCredentials.access_token !== connection.access_token;
+    const expiryChanged =
+      refreshedCredentials.expiry_date &&
+      refreshedCredentials.expiry_date !==
+        (connection.expires_at
+          ? new Date(connection.expires_at).getTime()
+          : null);
+
+    if (accessTokenChanged || expiryChanged) {
+      await supabase
+        .from("youtube_connections")
+        .update({
+          access_token: refreshedCredentials.access_token,
+          expires_at: refreshedCredentials.expiry_date
+            ? new Date(refreshedCredentials.expiry_date).toISOString()
+            : connection.expires_at,
+        })
+        .eq("id", connection.id)
+        .eq("user_id", user.id);
+    }
 
     const comments =
       response.data.items?.map((item) => {
