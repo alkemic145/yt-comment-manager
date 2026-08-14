@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
 
@@ -8,14 +9,26 @@ export async function GET() {
     process.env.GOOGLE_REDIRECT_URI
   );
 
+  const state = crypto.randomBytes(32).toString("hex");
+
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
+    state,
     scope: [
       "https://www.googleapis.com/auth/youtube.readonly",
       "https://www.googleapis.com/auth/youtube.force-ssl",
     ],
   });
 
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(authUrl);
+  response.cookies.set("youtube_oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 10 * 60,
+  });
+
+  return response;
 }
