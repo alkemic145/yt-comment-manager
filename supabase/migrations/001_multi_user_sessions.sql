@@ -23,8 +23,9 @@ alter table youtube_connections
 create index if not exists idx_auth_sessions_token_hash on auth_sessions(token_hash);
 create index if not exists idx_auth_sessions_user_id on auth_sessions(user_id);
 create index if not exists idx_youtube_connections_user_id on youtube_connections(user_id);
+create unique index if not exists idx_youtube_connections_channel_id_unique
+  on youtube_connections(channel_id);
 
--- These tables are accessed only by the server through the service-role client.
 alter table app_users enable row level security;
 alter table auth_sessions enable row level security;
 alter table youtube_connections enable row level security;
