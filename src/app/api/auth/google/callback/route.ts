@@ -5,11 +5,23 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  const state = searchParams.get("state");
 
   if (!code) {
     return NextResponse.json(
       { error: "Authorization code missing" },
       { status: 400 }
+    );
+  }
+
+  const oauthState = request.headers.get("cookie")?.match(
+    /(?:^|; )youtube_oauth_state=([^;]+)/
+  )?.[1];
+
+  if (!state || !oauthState || state !== oauthState) {
+    return NextResponse.json(
+      { success: false, error: "Invalid OAuth state" },
+      { status: 403 }
     );
   }
 
@@ -20,26 +32,14 @@ export async function GET(request: Request) {
   );
 
   try {
-    // Get OAuth tokens
     const { tokens } = await oauth2Client.getToken(code);
-
-    console.log("Google OAuth successful");
-
-    console.log("Tokens received:", {
-      access_token: tokens.access_token ? "yes" : "no",
-      refresh_token: tokens.refresh_token ? "yes" : "no",
-    });
-
-    // Give the YouTube API the OAuth credentials
     oauth2Client.setCredentials(tokens);
 
-    // Create YouTube API client
     const youtube = google.youtube({
       version: "v3",
       auth: oauth2Client,
     });
 
-    // Get the connected YouTube channel
     const response = await youtube.channels.list({
       part: ["snippet", "statistics"],
       mine: true,
@@ -49,18 +49,13 @@ export async function GET(request: Request) {
 
     if (!channel) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "No YouTube channel found",
-        },
+        { success: false, error: "No YouTube channel found" },
         { status: 404 }
       );
     }
 
-    // Connect to Supabase
     const supabase = createSupabaseServerClient();
 
-    // Save the YouTube connection
     const { error: dbError } = await supabase
       .from("youtube_connections")
       .insert({
@@ -75,7 +70,6 @@ export async function GET(request: Request) {
 
     if (dbError) {
       console.error("Supabase error:", dbError);
-
       return NextResponse.json(
         {
           success: false,
@@ -85,27 +79,21 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "YouTube account connected successfully!",
-      channel: {
-        id: channel.id,
-        title: channel.snippet?.title,
-        description: channel.snippet?.description,
-        thumbnail: channel.snippet?.thumbnails?.default?.url,
-        subscribers: channel.statistics?.subscriberCount,
-        views: channel.statistics?.viewCount,
-        videos: channel.statistics?.videoCount,
-      },
+    const redirectUrl = new URL("/dashboard", request.url);
+    const redirect = NextResponse.redirect(redirectUrl);
+    redirect.cookies.set("youtube_oauth_state", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
     });
+
+    return redirect;
   } catch (error) {
     console.error("OAuth error:", error);
-
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to connect Google account",
-      },
+      { success: false, error: "Failed to connect Google account" },
       { status: 500 }
     );
   }
