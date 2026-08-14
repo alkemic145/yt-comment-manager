@@ -7,10 +7,7 @@ export async function POST(request: Request) {
 
     if (!comment || typeof comment !== "string") {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Comment is required",
-        },
+        { success: false, error: "Comment is required" },
         { status: 400 }
       );
     }
@@ -19,16 +16,12 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Gemini API key is not configured",
-        },
+        { success: false, error: "Gemini API key is not configured" },
         { status: 500 }
       );
     }
 
-    const prompt = `
-You are an AI assistant helping a YouTube creator reply to comments.
+    const prompt = `You are an AI assistant helping a YouTube creator reply to comments.
 
 Write a natural, human-sounding YouTube reply to the comment below.
 
@@ -46,11 +39,10 @@ Rules:
 - Write only the reply itself.
 
 YouTube comment:
-${comment}
-`;
+${comment}`;
 
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/interactions",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
       {
         method: "POST",
         headers: {
@@ -58,8 +50,11 @@ ${comment}
           "x-goog-api-key": apiKey,
         },
         body: JSON.stringify({
-          model: "gemini-3.5-flash-lite",
-          input: prompt,
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
         }),
       }
     );
@@ -68,57 +63,30 @@ ${comment}
 
     if (!response.ok) {
       console.error("Gemini API error:", data);
-
       return NextResponse.json(
-        {
-          success: false,
-          error: "Gemini API request failed",
-          details: data,
-        },
+        { success: false, error: "Gemini API request failed" },
         { status: response.status }
       );
     }
 
-    const reply = data?.steps
-      ?.find(
-        (step: {
-          type?: string;
-          content?: { text?: string }[];
-        }) => step.type === "model_output"
-      )
-      ?.content?.find(
-        (content: { type?: string; text?: string }) =>
-          content.type === "text"
-      )
-      ?.text?.trim();
+    const reply = data?.candidates?.[0]?.content?.parts
+      ?.map((part: { text?: string }) => part.text ?? "")
+      .join("")
+      .trim();
 
     if (!reply) {
-      console.error(
-        "Gemini response did not contain a reply:",
-        JSON.stringify(data, null, 2)
-      );
-
+      console.error("Gemini response did not contain a reply:", data);
       return NextResponse.json(
-        {
-          success: false,
-          error: "Gemini returned an empty reply",
-        },
+        { success: false, error: "Gemini returned an empty reply" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      reply,
-    });
+    return NextResponse.json({ success: true, reply });
   } catch (error) {
     console.error("AI reply error:", error);
-
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to generate AI reply",
-      },
+      { success: false, error: "Failed to generate AI reply" },
       { status: 500 }
     );
   }
