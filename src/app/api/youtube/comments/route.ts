@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
+import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET() {
@@ -28,13 +29,15 @@ export async function GET() {
 
     if (dbError || !connection) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "No connected YouTube channel found",
-        },
+        { success: false, error: "No connected YouTube channel found" },
         { status: 404 }
       );
     }
+
+    const accessToken = decryptToken(connection.access_token);
+    const refreshToken = connection.refresh_token
+      ? decryptToken(connection.refresh_token)
+      : undefined;
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -43,8 +46,8 @@ export async function GET() {
     );
 
     oauth2Client.setCredentials({
-      access_token: connection.access_token,
-      refresh_token: connection.refresh_token,
+      access_token: accessToken,
+      refresh_token: refreshToken,
       expiry_date: connection.expires_at
         ? new Date(connection.expires_at).getTime()
         : undefined,
@@ -65,7 +68,7 @@ export async function GET() {
     const refreshedCredentials = oauth2Client.credentials;
     const accessTokenChanged =
       refreshedCredentials.access_token &&
-      refreshedCredentials.access_token !== connection.access_token;
+      refreshedCredentials.access_token !== accessToken;
     const expiryChanged =
       refreshedCredentials.expiry_date &&
       refreshedCredentials.expiry_date !==
@@ -77,7 +80,9 @@ export async function GET() {
       await supabase
         .from("youtube_connections")
         .update({
-          access_token: refreshedCredentials.access_token,
+          access_token: refreshedCredentials.access_token
+            ? encryptToken(refreshedCredentials.access_token)
+            : connection.access_token,
           expires_at: refreshedCredentials.expiry_date
             ? new Date(refreshedCredentials.expiry_date).toISOString()
             : connection.expires_at,
@@ -116,10 +121,7 @@ export async function GET() {
     console.error("Comments API error:", error);
 
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch YouTube comments",
-      },
+      { success: false, error: "Failed to fetch YouTube comments" },
       { status: 500 }
     );
   }
