@@ -1,3 +1,7 @@
 {
+  "/api/auth/google/callback/route": "app/api/auth/google/callback/route.js",
+  "/api/auth/google/route": "app/api/auth/google/route.js",
+  "/api/youtube/channel/route": "app/api/youtube/channel/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/page": "app/page.js"
 }

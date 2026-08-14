@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 154, "column": 0}, "map": {"version":3,"sources":["file:///workspaces/yt-comment-manager/src/app/api/auth/google/route.ts"],"sourcesContent":["import { google } from \"googleapis\";\nimport { NextResponse } from \"next/server\";\n\nexport async function GET() {\n  const oauth2Client = new google.auth.OAuth2(\n    process.env.GOOGLE_CLIENT_ID,\n    process.env.GOOGLE_CLIENT_SECRET,\n    process.env.GOOGLE_REDIRECT_URI\n  );\n\n  const authUrl = oauth2Client.generateAuthUrl({\n    access_type: \"offline\",\n    prompt: \"consent\",\n    scope: [\n      \"https://www.googleapis.com/auth/youtube.readonly\",\n      \"https://www.googleapis.com/auth/youtube.force-ssl\",\n    ],\n  });\n\n  return NextResponse.redirect(authUrl);\n}"],"names":["GET","oauth2Client","auth","OAuth2","process","env","GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REDIRECT_URI","authUrl","generateAuthUrl","access_type","prompt","scope","redirect"],"mappings":";;;;AAAA;AACA;;;AAEO,eAAeA;IACpB,MAAMC,eAAe,IAAI,+JAAM,CAACC,IAAI,CAACC,MAAM,CACzCC,QAAQC,GAAG,CAACC,gBAAgB,EAC5BF,QAAQC,GAAG,CAACE,oBAAoB,EAChCH,QAAQC,GAAG,CAACG,mBAAmB;IAGjC,MAAMC,UAAUR,aAAaS,eAAe,CAAC;QAC3CC,aAAa;QACbC,QAAQ;QACRC,OAAO;YACL;YACA;SACD;IACH;IAEA,OAAO,gJAAY,CAACC,QAAQ,CAACL;AAC/B"}}]
+}
