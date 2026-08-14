@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   ChevronDown,
@@ -13,43 +14,28 @@ import {
   Video,
 } from "lucide-react";
 
-const comments = [
-  {
-    author: "@marcusbuilds",
-    avatar: "M",
-    time: "12 min ago",
-    text: "Which mic do you use for voiceovers?",
-    category: "Needs reply",
-    categoryStyle:
-      "border-signal-500/30 bg-signal-500/10 text-signal-300",
-  },
-  {
-    author: "@leah.codes",
-    avatar: "L",
-    time: "24 min ago",
-    text: "This changed how I edit, thank you.",
-    category: "Needs reply",
-    categoryStyle:
-      "border-signal-500/30 bg-signal-500/10 text-signal-300",
-  },
-  {
-    author: "@dev_priya",
-    avatar: "D",
-    time: "41 min ago",
-    text: "Second this.",
-    category: "Can wait",
-    categoryStyle:
-      "border-calm-500/30 bg-calm-500/10 text-calm-300",
-  },
-  {
-    author: "@promo.acct219",
-    avatar: "P",
-    time: "1 hr ago",
-    text: "Check my channel, free giveaway!!",
-    category: "Spam",
-    categoryStyle: "border-ink-700 bg-ink-900 text-fog-400",
-  },
-];
+type YouTubeComment = {
+  comment_id: string;
+  video_id: string;
+  text: string;
+  author: string;
+  author_image?: string;
+  published_at: string;
+  updated_at: string;
+  like_count: number;
+  reply_count: number;
+};
+
+type CommentsResponse = {
+  success: boolean;
+  channel?: {
+    id: string;
+    title: string;
+  };
+  count?: number;
+  comments?: YouTubeComment[];
+  error?: string;
+};
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard, active: true },
@@ -57,11 +43,165 @@ const navigation = [
   { label: "AI Replies", icon: Sparkles, active: false },
 ];
 
+function formatRelativeTime(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return "Just now";
+
+  const minutes = Math.floor(seconds / 60);
+
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) return `${hours} hr ago`;
+
+  const days = Math.floor(hours / 24);
+
+  if (days < 7) {
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function getCategory(comment: YouTubeComment) {
+  if (comment.reply_count > 0) {
+    return {
+      label: "Replied",
+      style: "border-calm-500/30 bg-calm-500/10 text-calm-300",
+    };
+  }
+
+  return {
+    label: "Needs reply",
+    style: "border-signal-500/30 bg-signal-500/10 text-signal-300",
+  };
+}
+
 export default function DashboardPage() {
+  const [comments, setComments] = useState<YouTubeComment[]>([]);
+  const [channelTitle, setChannelTitle] = useState("Your Channel");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [generatingReplyFor, setGeneratingReplyFor] = useState<string | null>(
+    null
+  );
+
+  const [aiReplies, setAiReplies] = useState<Record<string, string>>({});
+
+  const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
+
+  async function generateReply(comment: YouTubeComment) {
+    try {
+      setGeneratingReplyFor(comment.comment_id);
+
+      setAiErrors((current) => ({
+        ...current,
+        [comment.comment_id]: "",
+      }));
+
+      const response = await fetch("/api/ai/reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          comment: comment.text,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to generate reply");
+      }
+
+      setAiReplies((current) => ({
+        ...current,
+        [comment.comment_id]: data.reply,
+      }));
+    } catch (error) {
+      console.error("Generate reply error:", error);
+
+      setAiErrors((current) => ({
+        ...current,
+        [comment.comment_id]:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate AI reply",
+      }));
+    } finally {
+      setGeneratingReplyFor(null);
+    }
+  }
+
+  function updateAiReply(commentId: string, value: string) {
+    setAiReplies((current) => ({
+      ...current,
+      [commentId]: value,
+    }));
+  }
+
+  useEffect(() => {
+    async function loadComments() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch("/api/youtube/comments");
+        const data: CommentsResponse = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load comments");
+        }
+
+        setComments(data.comments ?? []);
+
+        if (data.channel?.title) {
+          setChannelTitle(data.channel.title);
+        }
+      } catch (error) {
+        console.error("Dashboard comments error:", error);
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load YouTube comments"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadComments();
+  }, []);
+
+  const stats = useMemo(() => {
+    const total = comments.length;
+
+    const needsReply = comments.filter(
+      (comment) => comment.reply_count === 0
+    ).length;
+
+    const replied = comments.filter(
+      (comment) => comment.reply_count > 0
+    ).length;
+
+    return {
+      total,
+      needsReply,
+      replied,
+    };
+  }, [comments]);
+
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50">
       <div className="flex min-h-screen">
-        {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 border-r border-ink-800 bg-ink-950 lg:flex lg:flex-col">
           <div className="flex h-16 items-center border-b border-ink-800 px-6">
             <div className="flex items-center gap-2">
@@ -117,7 +257,6 @@ export default function DashboardPage() {
             </nav>
           </div>
 
-          {/* Connected channel */}
           <div className="border-t border-ink-800 p-4">
             <div className="rounded-lg border border-ink-800 bg-ink-900/50 p-3">
               <div className="flex items-center gap-3">
@@ -127,11 +266,11 @@ export default function DashboardPage() {
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-paper-50">
-                    Your Channel
+                    {channelTitle}
                   </p>
 
-                  <p className="font-mono text-[10px] text-fog-500">
-                    Not connected
+                  <p className="font-mono text-[10px] text-calm-400">
+                    Connected
                   </p>
                 </div>
 
@@ -141,9 +280,7 @@ export default function DashboardPage() {
           </div>
         </aside>
 
-        {/* Main */}
         <main className="min-w-0 flex-1">
-          {/* Top bar */}
           <header className="flex h-16 items-center justify-between border-b border-ink-800 px-5 sm:px-8">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-fog-500">
@@ -176,9 +313,7 @@ export default function DashboardPage() {
             </div>
           </header>
 
-          {/* Content */}
           <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-            {/* Page heading */}
             <div className="mb-8">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-signal-400">
                 Overview
@@ -191,8 +326,8 @@ export default function DashboardPage() {
                   </h2>
 
                   <p className="mt-2 max-w-xl text-sm leading-6 text-fog-400">
-                    Triage has sorted the latest comments from your channel.
-                    Focus on the conversations that actually need you.
+                    Triage is now connected to your YouTube channel and
+                    showing your latest comments.
                   </p>
                 </div>
 
@@ -206,35 +341,33 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Stats */}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                label="New comments"
-                value="214"
-                detail="Since your last visit"
+                label="Recent comments"
+                value={loading ? "—" : String(stats.total)}
+                detail="Loaded from YouTube"
               />
 
               <StatCard
                 label="Needs reply"
-                value="38"
-                detail="Worth your attention"
+                value={loading ? "—" : String(stats.needsReply)}
+                detail="Comments without replies"
                 accent
               />
 
               <StatCard
-                label="Can wait"
-                value="164"
-                detail="Low priority"
+                label="Replied"
+                value={loading ? "—" : String(stats.replied)}
+                detail="Already have replies"
               />
 
               <StatCard
-                label="Spam"
-                value="12"
-                detail="Automatically filtered"
+                label="Connection"
+                value={loading ? "—" : "Live"}
+                detail={channelTitle}
               />
             </div>
 
-            {/* Comment inbox */}
             <section className="mt-8">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -243,7 +376,7 @@ export default function DashboardPage() {
                   </h3>
 
                   <p className="mt-1 text-xs text-fog-500">
-                    Showing the latest activity from your channel.
+                    Showing the latest activity from your YouTube channel.
                   </p>
                 </div>
 
@@ -253,64 +386,220 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-950">
-                {comments.map((comment, index) => (
-                  <div
-                    key={comment.author}
-                    className={`p-4 sm:p-5 ${
-                      index !== comments.length - 1
-                        ? "border-b border-ink-800"
-                        : ""
-                    }`}
+              {loading && (
+                <div className="rounded-xl border border-ink-800 bg-ink-950 p-8 text-center">
+                  <p className="text-sm text-fog-400">
+                    Loading your YouTube comments...
+                  </p>
+                </div>
+              )}
+
+              {!loading && error && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6">
+                  <p className="text-sm font-medium text-red-300">
+                    Could not load comments
+                  </p>
+
+                  <p className="mt-2 text-xs text-fog-400">{error}</p>
+
+                  <a
+                    href="/api/auth/google"
+                    className="mt-4 inline-flex items-center gap-2 rounded-md bg-signal-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-signal-400"
                   >
-                    <div className="flex gap-4">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-800 font-mono text-xs text-fog-300">
-                        {comment.avatar}
-                      </div>
+                    <Video className="h-3.5 w-3.5" />
+                    Reconnect YouTube
+                  </a>
+                </div>
+              )}
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs text-fog-300">
-                            {comment.author}
-                          </span>
+              {!loading && !error && comments.length === 0 && (
+                <div className="rounded-xl border border-ink-800 bg-ink-950 p-8 text-center">
+                  <MessageSquare className="mx-auto h-8 w-8 text-fog-600" />
 
-                          <span className="text-[10px] text-fog-600">
-                            · {comment.time}
-                          </span>
+                  <p className="mt-3 text-sm font-medium text-paper-50">
+                    No comments found
+                  </p>
 
-                          <span
-                            className={`rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${comment.categoryStyle}`}
-                          >
-                            {comment.category}
-                          </span>
+                  <p className="mt-1 text-xs text-fog-500">
+                    Your channel doesn't have any comments available yet.
+                  </p>
+                </div>
+              )}
+
+              {!loading && !error && comments.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-950">
+                  {comments.map((comment, index) => {
+                    const category = getCategory(comment);
+                    const isGenerating =
+                      generatingReplyFor === comment.comment_id;
+
+                    const aiReply = aiReplies[comment.comment_id];
+                    const aiError = aiErrors[comment.comment_id];
+
+                    return (
+                      <div
+                        key={comment.comment_id}
+                        className={`p-4 sm:p-5 ${
+                          index !== comments.length - 1
+                            ? "border-b border-ink-800"
+                            : ""
+                        }`}
+                      >
+                        <div className="flex gap-4">
+                          {comment.author_image ? (
+                            <img
+                              src={comment.author_image}
+                              alt={comment.author}
+                              className="h-9 w-9 shrink-0 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-800 font-mono text-xs text-fog-300">
+                              {comment.author.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs text-fog-300">
+                                {comment.author}
+                              </span>
+
+                              <span className="text-[10px] text-fog-600">
+                                · {formatRelativeTime(comment.published_at)}
+                              </span>
+
+                              <span
+                                className={`rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${category.style}`}
+                              >
+                                {category.label}
+                              </span>
+                            </div>
+
+                            <p
+                              className="mt-2 text-sm leading-6 text-paper-50"
+                              dangerouslySetInnerHTML={{
+                                __html: comment.text,
+                              }}
+                            />
+
+                            <div className="mt-4 flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => generateReply(comment)}
+                                disabled={isGenerating}
+                                className="flex items-center gap-1.5 rounded-md bg-signal-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+
+                                {isGenerating
+                                  ? "Generating..."
+                                  : aiReply
+                                    ? "Regenerate reply"
+                                    : "Generate reply"}
+                              </button>
+
+                              <button className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50">
+                                Mark as done
+                              </button>
+
+                              <span className="ml-auto text-[10px] text-fog-600">
+                                {comment.like_count}{" "}
+                                {comment.like_count === 1 ? "like" : "likes"}
+                              </span>
+
+                              <button className="rounded-md p-1.5 text-fog-600 hover:bg-ink-900 hover:text-fog-300">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            {isGenerating && (
+                              <div className="mt-4 rounded-lg border border-signal-500/20 bg-signal-500/5 p-4">
+                                <div className="flex items-center gap-2">
+                                  <Sparkles className="h-4 w-4 animate-pulse text-signal-400" />
+
+                                  <span className="text-xs font-medium text-signal-300">
+                                    Triage is thinking...
+                                  </span>
+                                </div>
+
+                                <p className="mt-2 text-[11px] text-fog-500">
+                                  Creating a natural reply for this comment.
+                                </p>
+                              </div>
+                            )}
+
+                            {aiError && !isGenerating && (
+                              <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                                <p className="text-xs font-medium text-red-300">
+                                  Could not generate reply
+                                </p>
+
+                                <p className="mt-1 text-[11px] text-fog-500">
+                                  {aiError}
+                                </p>
+                              </div>
+                            )}
+
+                            {aiReply && !isGenerating && (
+                              <div className="mt-4 rounded-lg border border-calm-500/20 bg-calm-500/5 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <Sparkles className="h-4 w-4 text-calm-400" />
+
+                                    <span className="text-xs font-medium text-calm-300">
+                                      AI suggested reply
+                                    </span>
+                                  </div>
+
+                                  <span className="font-mono text-[9px] uppercase tracking-wide text-fog-600">
+                                    Draft
+                                  </span>
+                                </div>
+
+                                <textarea
+                                  value={aiReply}
+                                  onChange={(event) =>
+                                    updateAiReply(
+                                      comment.comment_id,
+                                      event.target.value
+                                    )
+                                  }
+                                  rows={3}
+                                  className="mt-3 w-full resize-none rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-sm leading-6 text-paper-50 outline-none placeholder:text-fog-600 focus:border-signal-500/50"
+                                />
+
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <button
+                                    disabled
+                                    className="rounded-md bg-calm-500 px-3 py-1.5 text-xs font-medium text-ink-950 opacity-60"
+                                  >
+                                    Reply to YouTube
+                                  </button>
+
+                                  <button
+                                    onClick={() =>
+                                      updateAiReply(comment.comment_id, "")
+                                    }
+                                    className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50"
+                                  >
+                                    Clear
+                                  </button>
+
+                                  <span className="text-[10px] text-fog-600">
+                                    You can edit the AI suggestion before
+                                    posting.
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-
-                        <p className="mt-2 text-sm leading-6 text-paper-50">
-                          {comment.text}
-                        </p>
-
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                          <button className="flex items-center gap-1.5 rounded-md bg-signal-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-signal-400">
-                            <Sparkles className="h-3.5 w-3.5" />
-                            Generate reply
-                          </button>
-
-                          <button className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50">
-                            Mark as done
-                          </button>
-
-                          <button className="ml-auto rounded-md p-1.5 text-fog-600 hover:bg-ink-900 hover:text-fog-300">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
-            {/* Bottom info */}
             <div className="mt-6 flex flex-col gap-3 rounded-xl border border-ink-800 bg-ink-900/30 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-calm-500/10">
@@ -323,7 +612,7 @@ export default function DashboardPage() {
                   </p>
 
                   <p className="mt-0.5 text-[11px] text-fog-500">
-                    Triage is monitoring new comments.
+                    Triage is connected to your YouTube comments.
                   </p>
                 </div>
               </div>
@@ -363,11 +652,9 @@ function StatCard({
         )}
       </div>
 
-      <p className="mt-4 text-2xl font-semibold tracking-tight">
-        {value}
-      </p>
+      <p className="mt-4 text-2xl font-semibold tracking-tight">{value}</p>
 
-      <p className="mt-1 text-[11px] text-fog-500">{detail}</p>
+      <p className="mt-1 truncate text-[11px] text-fog-500">{detail}</p>
     </div>
   );
 }
