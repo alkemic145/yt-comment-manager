@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/app-auth";
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const comment = body.comment;
 
