@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
+import { createAppSession } from "@/lib/app-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET(request: Request) {
@@ -14,7 +15,8 @@ export async function GET(request: Request) {
     );
   }
 
-  const oauthState = request.headers.get("cookie")?.match(
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const oauthState = cookieHeader.match(
     /(?:^|; )youtube_oauth_state=([^;]+)/
   )?.[1];
 
@@ -34,6 +36,41 @@ export async function GET(request: Request) {
   try {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
+
+    if (!tokens.access_token) {
+      return NextResponse.json(
+        { success: false, error: "Google did not return an access token" },
+        { status: 400 }
+      );
+    }
+
+    const userInfoResponse = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+        cache: "no-store",
+      }
+    );
+
+    if (!userInfoResponse.ok) {
+      return NextResponse.json(
+        { success: false, error: "Could not identify Google account" },
+        { status: 401 }
+      );
+    }
+
+    const userInfo = (await userInfoResponse.json()) as {
+      sub?: string;
+      email?: string;
+      name?: string;
+    };
+
+    if (!userInfo.sub) {
+      return NextResponse.json(
+        { success: false, error: "Google account identity is missing" },
+        { status: 400 }
+      );
+    }
 
     const youtube = google.youtube({
       version: "v3",
@@ -56,17 +93,43 @@ export async function GET(request: Request) {
 
     const supabase = createSupabaseServerClient();
 
+    const { data: user, error: userError } = await supabase
+      .from("app_users")
+      .upsert(
+        {
+          google_sub: userInfo.sub,
+          email: userInfo.email ?? null,
+          name: userInfo.name ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "google_sub" }
+      )
+      .select("id")
+      .single();
+
+    if (userError || !user) {
+      console.error("User save error:", userError);
+      return NextResponse.json(
+        { success: false, error: "Failed to create account" },
+        { status: 500 }
+      );
+    }
+
     const { error: dbError } = await supabase
       .from("youtube_connections")
-      .insert({
-        channel_id: channel.id,
-        channel_title: channel.snippet?.title,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiry_date
-          ? new Date(tokens.expiry_date).toISOString()
-          : null,
-      });
+      .upsert(
+        {
+          user_id: user.id,
+          channel_id: channel.id,
+          channel_title: channel.snippet?.title,
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: tokens.expiry_date
+            ? new Date(tokens.expiry_date).toISOString()
+            : null,
+        },
+        { onConflict: "channel_id" }
+      );
 
     if (dbError) {
       console.error("Supabase error:", dbError);
@@ -78,6 +141,8 @@ export async function GET(request: Request) {
         { status: 500 }
       );
     }
+
+    await createAppSession(user.id);
 
     const redirectUrl = new URL("/dashboard", request.url);
     const redirect = NextResponse.redirect(redirectUrl);
