@@ -16,6 +16,9 @@ export async function GET() {
     prompt: "consent",
     state,
     scope: [
+      "openid",
+      "email",
+      "profile",
       "https://www.googleapis.com/auth/youtube.readonly",
       "https://www.googleapis.com/auth/youtube.force-ssl",
     ],
