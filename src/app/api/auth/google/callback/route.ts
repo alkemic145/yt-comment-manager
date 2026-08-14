@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
 import { createAppSession } from "@/lib/app-auth";
+import { encryptToken } from "@/lib/token-crypto";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET(request: Request) {
@@ -115,21 +116,23 @@ export async function GET(request: Request) {
       );
     }
 
+    const connectionPayload: Record<string, unknown> = {
+      user_id: user.id,
+      channel_id: channel.id,
+      channel_title: channel.snippet?.title,
+      access_token: encryptToken(tokens.access_token),
+      expires_at: tokens.expiry_date
+        ? new Date(tokens.expiry_date).toISOString()
+        : null,
+    };
+
+    if (tokens.refresh_token) {
+      connectionPayload.refresh_token = encryptToken(tokens.refresh_token);
+    }
+
     const { error: dbError } = await supabase
       .from("youtube_connections")
-      .upsert(
-        {
-          user_id: user.id,
-          channel_id: channel.id,
-          channel_title: channel.snippet?.title,
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
-          expires_at: tokens.expiry_date
-            ? new Date(tokens.expiry_date).toISOString()
-            : null,
-        },
-        { onConflict: "channel_id" }
-      );
+      .upsert(connectionPayload, { onConflict: "channel_id" });
 
     if (dbError) {
       console.error("Supabase error:", dbError);
