@@ -4,6 +4,17 @@ import { getCurrentUser } from "@/lib/app-auth";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
+function escapeHtml(value: string | undefined | null) {
+  if (!value) return "";
+
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -66,27 +77,43 @@ export async function GET() {
     });
 
     const refreshedCredentials = oauth2Client.credentials;
+    const refreshedAccessToken = refreshedCredentials.access_token;
+    const refreshedRefreshToken = refreshedCredentials.refresh_token;
+    const refreshedExpiry = refreshedCredentials.expiry_date;
+
     const accessTokenChanged =
-      refreshedCredentials.access_token &&
-      refreshedCredentials.access_token !== accessToken;
+      !!refreshedAccessToken && refreshedAccessToken !== accessToken;
+    const refreshTokenChanged =
+      !!refreshedRefreshToken && refreshedRefreshToken !== refreshToken;
     const expiryChanged =
-      refreshedCredentials.expiry_date &&
-      refreshedCredentials.expiry_date !==
+      !!refreshedExpiry &&
+      refreshedExpiry !==
         (connection.expires_at
           ? new Date(connection.expires_at).getTime()
           : null);
 
-    if (accessTokenChanged || expiryChanged) {
+    if (accessTokenChanged || refreshTokenChanged || expiryChanged) {
+      const updateData: {
+        access_token?: string;
+        refresh_token?: string;
+        expires_at?: string;
+      } = {};
+
+      if (refreshedAccessToken) {
+        updateData.access_token = encryptToken(refreshedAccessToken);
+      }
+
+      if (refreshedRefreshToken) {
+        updateData.refresh_token = encryptToken(refreshedRefreshToken);
+      }
+
+      if (refreshedExpiry) {
+        updateData.expires_at = new Date(refreshedExpiry).toISOString();
+      }
+
       await supabase
         .from("youtube_connections")
-        .update({
-          access_token: refreshedCredentials.access_token
-            ? encryptToken(refreshedCredentials.access_token)
-            : connection.access_token,
-          expires_at: refreshedCredentials.expiry_date
-            ? new Date(refreshedCredentials.expiry_date).toISOString()
-            : connection.expires_at,
-        })
+        .update(updateData)
         .eq("id", connection.id)
         .eq("user_id", user.id);
     }
@@ -98,7 +125,7 @@ export async function GET() {
         return {
           comment_id: item.snippet?.topLevelComment?.id,
           video_id: item.snippet?.videoId,
-          text: snippet?.textDisplay,
+          text: escapeHtml(snippet?.textOriginal ?? snippet?.textDisplay),
           author: snippet?.authorDisplayName,
           author_image: snippet?.authorProfileImageUrl,
           published_at: snippet?.publishedAt,
