@@ -32,6 +32,13 @@ export async function createAppSession(userId: string) {
   });
 }
 
+interface AppUserRow {
+  id: string;
+  google_sub: string;
+  email: string | null;
+  name: string | null;
+}
+
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
@@ -46,12 +53,18 @@ export async function getCurrentUser() {
     .maybeSingle();
 
   if (error || !data?.app_users) return null;
-  return data.app_users as {
-    id: string;
-    google_sub: string;
-    email: string | null;
-    name: string | null;
-  };
+
+  // Supabase's client infers embedded to-one relations like this one
+  // (auth_sessions.user_id -> app_users.id) as an array type when the
+  // client isn't given generated database types, even though it's a
+  // single row at runtime. Handle both shapes defensively rather than
+  // assuming one, so this doesn't silently break if that ever changes.
+  const rawAppUser = data.app_users as unknown;
+  const appUser = Array.isArray(rawAppUser) ? rawAppUser[0] : rawAppUser;
+
+  if (!appUser) return null;
+
+  return appUser as AppUserRow;
 }
 
 export async function requireCurrentUser() {
