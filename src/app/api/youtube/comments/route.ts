@@ -3,17 +3,10 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-
-function escapeHtml(value: string | undefined | null) {
-  if (!value) return "";
-
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+import {
+  getConnectionWithTokensForUser,
+  updateConnectionTokens,
+} from "@/lib/youtube-connections";
 
 export async function GET() {
   try {
@@ -27,18 +20,9 @@ export async function GET() {
     }
 
     const supabase = createSupabaseServerClient();
+    const connection = await getConnectionWithTokensForUser(supabase, user.id);
 
-    const { data: connection, error: dbError } = await supabase
-      .from("youtube_connections")
-      .select(
-        "id, channel_id, channel_title, access_token, refresh_token, expires_at"
-      )
-      .eq("user_id", user.id)
-      .order("id", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (dbError || !connection) {
+    if (!connection) {
       return NextResponse.json(
         { success: false, error: "No connected YouTube channel found" },
         { status: 404 }
@@ -111,11 +95,12 @@ export async function GET() {
         updateData.expires_at = new Date(refreshedExpiry).toISOString();
       }
 
-      await supabase
-        .from("youtube_connections")
-        .update(updateData)
-        .eq("id", connection.id)
-        .eq("user_id", user.id);
+      await updateConnectionTokens(
+        supabase,
+        connection.id,
+        user.id,
+        updateData
+      );
     }
 
     const comments =
@@ -125,7 +110,7 @@ export async function GET() {
         return {
           comment_id: item.snippet?.topLevelComment?.id,
           video_id: item.snippet?.videoId,
-          text: escapeHtml(snippet?.textOriginal ?? snippet?.textDisplay),
+          text: snippet?.textOriginal ?? snippet?.textDisplay ?? "",
           author: snippet?.authorDisplayName,
           author_image: snippet?.authorProfileImageUrl,
           published_at: snippet?.publishedAt,

@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { createAppSession } from "@/lib/app-auth";
 import { encryptToken } from "@/lib/token-crypto";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import {
+  upsertConnection,
+  type YoutubeConnectionUpsertPayload,
+} from "@/lib/youtube-connections";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -85,7 +89,7 @@ export async function GET(request: Request) {
 
     const channel = response.data.items?.[0];
 
-    if (!channel) {
+    if (!channel || !channel.id) {
       return NextResponse.json(
         { success: false, error: "No YouTube channel found" },
         { status: 404 }
@@ -116,7 +120,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const connectionPayload: Record<string, unknown> = {
+    const connectionPayload: YoutubeConnectionUpsertPayload = {
       user_id: user.id,
       channel_id: channel.id,
       channel_title: channel.snippet?.title,
@@ -130,9 +134,10 @@ export async function GET(request: Request) {
       connectionPayload.refresh_token = encryptToken(tokens.refresh_token);
     }
 
-    const { error: dbError } = await supabase
-      .from("youtube_connections")
-      .upsert(connectionPayload, { onConflict: "channel_id" });
+    const { error: dbError } = await upsertConnection(
+      supabase,
+      connectionPayload
+    );
 
     if (dbError) {
       console.error("Supabase error:", dbError);

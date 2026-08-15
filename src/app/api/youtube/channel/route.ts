@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getConnectionSummaryForUser } from "@/lib/youtube-connections";
 
 export async function GET() {
   try {
@@ -14,16 +15,9 @@ export async function GET() {
     }
 
     const supabase = createSupabaseServerClient();
+    const data = await getConnectionSummaryForUser(supabase, user.id);
 
-    const { data, error } = await supabase
-      .from("youtube_connections")
-      .select("channel_id, channel_title")
-      .eq("user_id", user.id)
-      .order("id", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) {
+    if (!data) {
       return NextResponse.json(
         {
           success: false,
