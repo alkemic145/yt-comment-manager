@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Bell,
   ChevronDown,
@@ -514,9 +515,11 @@ export default function DashboardClient() {
                       >
                         <div className="flex gap-4">
                           {comment.author_image ? (
-                            <img
+                            <Image
                               src={comment.author_image}
                               alt={comment.author}
+                              width={36}
+                              height={36}
                               className="h-9 w-9 shrink-0 rounded-full object-cover"
                             />
                           ) : (

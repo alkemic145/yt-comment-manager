@@ -59,6 +59,41 @@ export async function upsertComments(
     .upsert(rows, { onConflict: "comment_id" });
 }
 
+/**
+ * Saves a large YouTube sync in manageable database batches. Keeping the
+ * batches here lets the sync route fetch every available YouTube page without
+ * creating a single oversized Supabase request.
+ */
+export async function upsertCommentsInBatches(
+  supabase: SupabaseClient,
+  comments: CommentUpsertInput[],
+  batchSize = 500
+) {
+  for (let start = 0; start < comments.length; start += batchSize) {
+    const batch = comments.slice(start, start + batchSize);
+    const { error } = await upsertComments(
+      supabase,
+      batch
+    );
+
+    if (error) {
+      return {
+        error,
+        storedCount: start,
+        failedCount: batch.length,
+        remainingCount: comments.length - start - batch.length,
+      };
+    }
+  }
+
+  return {
+    error: null,
+    storedCount: comments.length,
+    failedCount: 0,
+    remainingCount: 0,
+  };
+}
+
 export interface CommentsPage {
   comments: StoredComment[];
   page: number;
@@ -95,9 +130,7 @@ export async function getCommentsPage(
     .order("published_at", { ascending: false })
     .range(from, to);
 
-  if (error) {
-    return { comments: [], page, pageSize, totalCount: 0, hasMore: false };
-  }
+  if (error) throw error;
 
   const totalCount = count ?? 0;
   const loaded = (data ?? []) as StoredComment[];

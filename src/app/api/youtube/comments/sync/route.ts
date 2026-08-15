@@ -7,7 +7,10 @@ import {
   getConnectionWithTokensForUser,
   updateConnectionTokens,
 } from "@/lib/youtube-connections";
-import { upsertComments } from "@/lib/comments-repo";
+import {
+  upsertCommentsInBatches,
+  type CommentUpsertInput,
+} from "@/lib/comments-repo";
 
 export async function POST() {
   try {
@@ -54,12 +57,50 @@ export async function POST() {
       auth: oauth2Client,
     });
 
-    const response = await youtube.commentThreads.list({
-      part: ["snippet", "replies"],
-      allThreadsRelatedToChannelId: connection.channel_id,
-      maxResults: 20,
-      order: "time",
-    });
+    let pageToken: string | undefined;
+    const commentsToStore: CommentUpsertInput[] = [];
+
+    // The YouTube API returns at most 100 comment threads per request. Keep
+    // following its cursor so the local store contains the whole accessible
+    // channel history, rather than only the first page.
+    do {
+      const response = await youtube.commentThreads.list({
+        part: ["snippet", "replies"],
+        allThreadsRelatedToChannelId: connection.channel_id,
+        maxResults: 100,
+        order: "time",
+        pageToken,
+      });
+
+      commentsToStore.push(
+        ...(response.data.items ?? [])
+          .map((item) => {
+            const snippet = item.snippet?.topLevelComment?.snippet;
+            const commentId = item.snippet?.topLevelComment?.id ?? item.id;
+
+            if (!commentId) return null;
+
+            return {
+              user_id: user.id,
+              connection_id: connection.id ? Number(connection.id) : null,
+              comment_id: commentId,
+              video_id: item.snippet?.videoId ?? null,
+              text: snippet?.textOriginal ?? snippet?.textDisplay ?? null,
+              author: snippet?.authorDisplayName ?? null,
+              author_image: snippet?.authorProfileImageUrl ?? null,
+              like_count: snippet?.likeCount ?? 0,
+              reply_count: item.snippet?.totalReplyCount ?? 0,
+              published_at: snippet?.publishedAt ?? null,
+              updated_at: snippet?.updatedAt ?? null,
+            };
+          })
+          .filter(
+            (comment): comment is CommentUpsertInput => comment !== null
+          )
+      );
+
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
 
     // Persist any refreshed tokens (same pattern as the old comments route).
     const refreshedCredentials = oauth2Client.credentials;
@@ -105,42 +146,23 @@ export async function POST() {
       );
     }
 
-    const items = response.data.items ?? [];
-
-    const commentsToStore = items
-      .map((item) => {
-        const snippet = item.snippet?.topLevelComment?.snippet;
-        const commentId = item.snippet?.topLevelComment?.id ?? item.id;
-
-        if (!commentId) return null;
-
-        return {
-          user_id: user.id,
-          connection_id: connection.id ? Number(connection.id) : null,
-          comment_id: commentId,
-          video_id: item.snippet?.videoId ?? null,
-          text: snippet?.textOriginal ?? snippet?.textDisplay ?? null,
-          author: snippet?.authorDisplayName ?? null,
-          author_image: snippet?.authorProfileImageUrl ?? null,
-          like_count: snippet?.likeCount ?? 0,
-          reply_count: item.snippet?.totalReplyCount ?? 0,
-          published_at: snippet?.publishedAt ?? null,
-          updated_at: snippet?.updatedAt ?? null,
-        };
-      })
-      .filter(
-        (comment): comment is NonNullable<typeof comment> => comment !== null
-      );
-
-    const { error: upsertError } = await upsertComments(
+    const batchResult = await upsertCommentsInBatches(
       supabase,
       commentsToStore
     );
 
-    if (upsertError) {
-      console.error("Comment sync upsert error:", upsertError);
+    if (batchResult.error) {
+      console.error("Comment sync upsert error:", batchResult.error);
       return NextResponse.json(
-        { success: false, error: "Failed to save synced comments" },
+        {
+          success: false,
+          partial: batchResult.storedCount > 0,
+          error: "Failed to save all synced comments",
+          fetched: commentsToStore.length,
+          stored: batchResult.storedCount,
+          failed: batchResult.failedCount,
+          remaining: batchResult.remainingCount,
+        },
         { status: 500 }
       );
     }
@@ -152,6 +174,8 @@ export async function POST() {
         title: connection.channel_title,
       },
       synced: commentsToStore.length,
+      fetched: commentsToStore.length,
+      stored: batchResult.storedCount,
     });
   } catch (error) {
     console.error("Comment sync error:", error);
