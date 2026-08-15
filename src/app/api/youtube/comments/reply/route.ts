@@ -1,7 +1,10 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
-import { getConnectionWithTokensForUser } from "@/lib/youtube-connections";
+import {
+  getConnectionWithTokensForUser,
+  updateConnectionTokens,
+} from "@/lib/youtube-connections";
 import { getCommentForUser } from "@/lib/comments-repo";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
@@ -82,12 +85,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!connection.refresh_token && !connection.access_token) {
-      return NextResponse.json(
-        { success: false, error: "YouTube authorization is missing" },
-        { status: 401 }
-      );
-    }
+    const accessToken = decryptToken(connection.access_token);
+    const refreshToken = connection.refresh_token
+      ? decryptToken(connection.refresh_token)
+      : undefined;
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -95,14 +96,9 @@ export async function POST(request: Request) {
       process.env.GOOGLE_REDIRECT_URI
     );
 
-    const encryptedAccessToken = connection.access_token;
-    const encryptedRefreshToken = connection.refresh_token;
-
     oauth2Client.setCredentials({
-      access_token: decryptToken(encryptedAccessToken),
-      refresh_token: encryptedRefreshToken
-        ? decryptToken(encryptedRefreshToken)
-        : undefined,
+      access_token: accessToken,
+      refresh_token: refreshToken,
       expiry_date: connection.expires_at
         ? new Date(connection.expires_at).getTime()
         : undefined,
@@ -121,10 +117,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const refreshedCredentials = oauth2Client.credentials;
-    const refreshedAccessToken = refreshedCredentials.access_token;
+    const credentials = oauth2Client.credentials;
+    const currentAccessToken = credentials.access_token;
 
-    if (!refreshedAccessToken) {
+    if (!currentAccessToken) {
       return NextResponse.json(
         {
           success: false,
@@ -140,31 +136,26 @@ export async function POST(request: Request) {
       expires_at?: string;
     } = {};
 
-    if (refreshedAccessToken !== decryptToken(encryptedAccessToken)) {
-      tokenUpdates.access_token = encryptToken(refreshedAccessToken);
+    if (currentAccessToken !== accessToken) {
+      tokenUpdates.access_token = encryptToken(currentAccessToken);
     }
 
-    if (
-      refreshedCredentials.refresh_token &&
-      refreshedCredentials.refresh_token !==
-        (encryptedRefreshToken ? decryptToken(encryptedRefreshToken) : null)
-    ) {
-      tokenUpdates.refresh_token = encryptToken(
-        refreshedCredentials.refresh_token
-      );
+    if (credentials.refresh_token && credentials.refresh_token !== refreshToken) {
+      tokenUpdates.refresh_token = encryptToken(credentials.refresh_token);
     }
 
-    if (refreshedCredentials.expiry_date) {
+    if (credentials.expiry_date) {
       tokenUpdates.expires_at = new Date(
-        refreshedCredentials.expiry_date
+        credentials.expiry_date
       ).toISOString();
     }
 
     if (Object.keys(tokenUpdates).length > 0) {
-      const { error: tokenUpdateError } = await import(
-        "@/lib/youtube-connections"
-      ).then(({ updateConnectionTokens }) =>
-        updateConnectionTokens(supabase, connection.id, user.id, tokenUpdates)
+      const { error: tokenUpdateError } = await updateConnectionTokens(
+        supabase,
+        connection.id,
+        user.id,
+        tokenUpdates
       );
 
       if (tokenUpdateError) {
