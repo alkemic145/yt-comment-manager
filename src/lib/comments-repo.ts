@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * All reads/writes to the local `comments` table go through this module,
  * for the same reason as src/lib/youtube-connections.ts: the Supabase
- * client used across this app authenticates with the service role key,
+ * client used across the app authenticates with the service role key,
  * which bypasses Row Level Security, so every query needs an explicit
  * `.eq("user_id", ...)` filter. Centralizing that here means it's written
  * and reviewed once instead of duplicated across routes.
@@ -33,6 +33,28 @@ export interface CommentUpsertInput {
   reply_count: number;
   published_at: string | null;
   updated_at: string | null;
+}
+
+/**
+ * Returns one stored comment only when it belongs to the authenticated user.
+ * This ownership check is important before allowing any write to YouTube.
+ */
+export async function getCommentForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  commentId: string
+): Promise<StoredComment | null> {
+  const { data, error } = await supabase
+    .from("comments")
+    .select(
+      "comment_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at"
+    )
+    .eq("user_id", userId)
+    .eq("comment_id", commentId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as StoredComment | null) ?? null;
 }
 
 /**
@@ -71,10 +93,7 @@ export async function upsertCommentsInBatches(
 ) {
   for (let start = 0; start < comments.length; start += batchSize) {
     const batch = comments.slice(start, start + batchSize);
-    const { error } = await upsertComments(
-      supabase,
-      batch
-    );
+    const { error } = await upsertComments(supabase, batch);
 
     if (error) {
       return {
