@@ -36,10 +36,6 @@ export interface CommentUpsertInput {
   updated_at: string | null;
 }
 
-/**
- * Returns one stored comment only when it belongs to the authenticated user.
- * This ownership check is important before allowing any write to YouTube.
- */
 export async function getCommentForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -58,12 +54,6 @@ export async function getCommentForUser(
   return (data as StoredComment | null) ?? null;
 }
 
-/**
- * Saves freshly-fetched comments from YouTube into local storage.
- * Comments are matched on `comment_id` (YouTube's own id), so re-syncing
- * an already-stored comment updates it in place rather than duplicating
- * it -- this is what lets sync run repeatedly and safely.
- */
 export async function upsertComments(
   supabase: SupabaseClient,
   comments: CommentUpsertInput[]
@@ -82,18 +72,21 @@ export async function upsertComments(
     .upsert(rows, { onConflict: "comment_id" });
 }
 
-/**
- * Saves a large YouTube sync in manageable database batches. Keeping the
- * batches here lets the sync route fetch every available YouTube page without
- * creating a single oversized Supabase request.
- */
 export async function upsertCommentsInBatches(
   supabase: SupabaseClient,
   comments: CommentUpsertInput[],
   batchSize = 500
 ) {
-  for (let start = 0; start < comments.length; start += batchSize) {
-    const batch = comments.slice(start, start + batchSize);
+  const deduped = new Map<string, CommentUpsertInput>();
+
+  for (const comment of comments) {
+    deduped.set(comment.comment_id, comment);
+  }
+
+  const uniqueComments = Array.from(deduped.values());
+
+  for (let start = 0; start < uniqueComments.length; start += batchSize) {
+    const batch = uniqueComments.slice(start, start + batchSize);
     const { error } = await upsertComments(supabase, batch);
 
     if (error) {
@@ -101,14 +94,14 @@ export async function upsertCommentsInBatches(
         error,
         storedCount: start,
         failedCount: batch.length,
-        remainingCount: comments.length - start - batch.length,
+        remainingCount: uniqueComments.length - start - batch.length,
       };
     }
   }
 
   return {
     error: null,
-    storedCount: comments.length,
+    storedCount: uniqueComments.length,
     failedCount: 0,
     remainingCount: 0,
   };
@@ -122,15 +115,6 @@ export interface CommentsPage {
   hasMore: boolean;
 }
 
-/**
- * Reads one page of a user's comments from local storage, newest first.
- * This is a plain offset/limit page (not keyset/cursor pagination) --
- * simple to reason about, and a fine trade-off at this scale. The known
- * limitation: if new comments are synced in between page loads, results
- * can shift slightly (e.g. an item might appear twice or be skipped
- * across two page loads). That's acceptable for a dashboard like this;
- * revisit with cursor-based pagination if it ever becomes noticeable.
- */
 export async function getCommentsPage(
   supabase: SupabaseClient,
   userId: string,
