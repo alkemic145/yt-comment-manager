@@ -1,14 +1,31 @@
-import { google } from "googleapis";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
-import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import {
-  getConnectionWithTokensForUser,
-  updateConnectionTokens,
-} from "@/lib/youtube-connections";
+import { getCommentsPage } from "@/lib/comments-repo";
 
-export async function GET() {
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 50;
+
+function parsePositiveInt(
+  value: string | null,
+  fallback: number,
+  max?: number
+): number {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  const truncated = Math.floor(parsed);
+  return max ? Math.min(truncated, max) : truncated;
+}
+
+// Reads a page of comments from local storage. This is intentionally
+// separate from POST /api/youtube/comments/sync (which is what actually
+// talks to the YouTube API) -- reads here are fast and free of YouTube
+// API quota cost, since they never leave the database.
+export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
 
@@ -19,121 +36,26 @@ export async function GET() {
       );
     }
 
-    const supabase = createSupabaseServerClient();
-    const connection = await getConnectionWithTokensForUser(supabase, user.id);
-
-    if (!connection) {
-      return NextResponse.json(
-        { success: false, error: "No connected YouTube channel found" },
-        { status: 404 }
-      );
-    }
-
-    const accessToken = decryptToken(connection.access_token);
-    const refreshToken = connection.refresh_token
-      ? decryptToken(connection.refresh_token)
-      : undefined;
-
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+    const { searchParams } = new URL(request.url);
+    const page = parsePositiveInt(searchParams.get("page"), 1);
+    const pageSize = parsePositiveInt(
+      searchParams.get("pageSize"),
+      DEFAULT_PAGE_SIZE,
+      MAX_PAGE_SIZE
     );
 
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expiry_date: connection.expires_at
-        ? new Date(connection.expires_at).getTime()
-        : undefined,
-    });
-
-    const youtube = google.youtube({
-      version: "v3",
-      auth: oauth2Client,
-    });
-
-    const response = await youtube.commentThreads.list({
-      part: ["snippet", "replies"],
-      allThreadsRelatedToChannelId: connection.channel_id,
-      maxResults: 20,
-      order: "time",
-    });
-
-    const refreshedCredentials = oauth2Client.credentials;
-    const refreshedAccessToken = refreshedCredentials.access_token;
-    const refreshedRefreshToken = refreshedCredentials.refresh_token;
-    const refreshedExpiry = refreshedCredentials.expiry_date;
-
-    const accessTokenChanged =
-      !!refreshedAccessToken && refreshedAccessToken !== accessToken;
-    const refreshTokenChanged =
-      !!refreshedRefreshToken && refreshedRefreshToken !== refreshToken;
-    const expiryChanged =
-      !!refreshedExpiry &&
-      refreshedExpiry !==
-        (connection.expires_at
-          ? new Date(connection.expires_at).getTime()
-          : null);
-
-    if (accessTokenChanged || refreshTokenChanged || expiryChanged) {
-      const updateData: {
-        access_token?: string;
-        refresh_token?: string;
-        expires_at?: string;
-      } = {};
-
-      if (refreshedAccessToken) {
-        updateData.access_token = encryptToken(refreshedAccessToken);
-      }
-
-      if (refreshedRefreshToken) {
-        updateData.refresh_token = encryptToken(refreshedRefreshToken);
-      }
-
-      if (refreshedExpiry) {
-        updateData.expires_at = new Date(refreshedExpiry).toISOString();
-      }
-
-      await updateConnectionTokens(
-        supabase,
-        connection.id,
-        user.id,
-        updateData
-      );
-    }
-
-    const comments =
-      response.data.items?.map((item) => {
-        const snippet = item.snippet?.topLevelComment?.snippet;
-
-        return {
-          comment_id: item.snippet?.topLevelComment?.id,
-          video_id: item.snippet?.videoId,
-          text: snippet?.textOriginal ?? snippet?.textDisplay ?? "",
-          author: snippet?.authorDisplayName,
-          author_image: snippet?.authorProfileImageUrl,
-          published_at: snippet?.publishedAt,
-          updated_at: snippet?.updatedAt,
-          like_count: snippet?.likeCount,
-          reply_count: item.snippet?.totalReplyCount,
-        };
-      }) ?? [];
+    const supabase = createSupabaseServerClient();
+    const result = await getCommentsPage(supabase, user.id, page, pageSize);
 
     return NextResponse.json({
       success: true,
-      channel: {
-        id: connection.channel_id,
-        title: connection.channel_title,
-      },
-      count: comments.length,
-      comments,
+      ...result,
     });
   } catch (error) {
-    console.error("Comments API error:", error);
+    console.error("Comments read error:", error);
 
     return NextResponse.json(
-      { success: false, error: "Failed to fetch YouTube comments" },
+      { success: false, error: "Failed to load comments" },
       { status: 500 }
     );
   }

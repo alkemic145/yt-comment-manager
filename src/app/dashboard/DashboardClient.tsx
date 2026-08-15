@@ -32,8 +32,21 @@ type CommentsResponse = {
     id: string;
     title: string;
   };
-  count?: number;
   comments?: YouTubeComment[];
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
+  hasMore?: boolean;
+  error?: string;
+};
+
+type SyncResponse = {
+  success: boolean;
+  channel?: {
+    id: string;
+    title: string;
+  };
+  synced?: number;
   error?: string;
 };
 
@@ -86,7 +99,11 @@ export default function DashboardClient() {
   const [comments, setComments] = useState<YouTubeComment[]>([]);
   const [channelTitle, setChannelTitle] = useState("Your Channel");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [generatingReplyFor, setGeneratingReplyFor] = useState<string | null>(
     null
@@ -147,43 +164,93 @@ export default function DashboardClient() {
     }));
   }
 
+  async function loadCommentsPage(pageNum: number, append: boolean) {
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      setError("");
+
+      const response = await fetch(
+        `/api/youtube/comments?page=${pageNum}&pageSize=20`
+      );
+      const data: CommentsResponse = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to load comments");
+      }
+
+      setComments((prev) =>
+        append ? [...prev, ...(data.comments ?? [])] : data.comments ?? []
+      );
+      setPage(pageNum);
+      setHasMore(Boolean(data.hasMore));
+      setTotalCount(data.totalCount ?? 0);
+    } catch (error) {
+      console.error("Dashboard comments error:", error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load YouTube comments"
+      );
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }
+
+  function loadMoreComments() {
+    loadCommentsPage(page + 1, true);
+  }
+
   useEffect(() => {
-    async function loadComments() {
+    async function initialize() {
       try {
         setLoading(true);
         setError("");
 
-        const response = await fetch("/api/youtube/comments");
-        const data: CommentsResponse = await response.json();
+        // Pull the latest comments in from YouTube and save them locally
+        // first, then read the first page back from local storage. Every
+        // subsequent page (via "Load more") reads from storage only --
+        // it never hits YouTube's API again.
+        const syncResponse = await fetch("/api/youtube/comments/sync", {
+          method: "POST",
+        });
+        const syncData: SyncResponse = await syncResponse.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Failed to load comments");
+        if (!syncResponse.ok || !syncData.success) {
+          throw new Error(
+            syncData.error || "Failed to sync YouTube comments"
+          );
         }
 
-        setComments(data.comments ?? []);
-
-        if (data.channel?.title) {
-          setChannelTitle(data.channel.title);
+        if (syncData.channel?.title) {
+          setChannelTitle(syncData.channel.title);
         }
+
+        await loadCommentsPage(1, false);
       } catch (error) {
-        console.error("Dashboard comments error:", error);
+        console.error("Dashboard initialize error:", error);
 
         setError(
           error instanceof Error
             ? error.message
             : "Failed to load YouTube comments"
         );
-      } finally {
         setLoading(false);
       }
     }
 
-    loadComments();
+    initialize();
   }, []);
 
   const stats = useMemo(() => {
-    const total = comments.length;
-
+    // needsReply/replied are computed only from currently loaded pages,
+    // not the full comment history -- total comes from the database's
+    // real count instead, via totalCount.
     const needsReply = comments.filter(
       (comment) => comment.reply_count === 0
     ).length;
@@ -193,11 +260,11 @@ export default function DashboardClient() {
     ).length;
 
     return {
-      total,
+      total: totalCount,
       needsReply,
       replied,
     };
-  }, [comments]);
+  }, [comments, totalCount]);
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50">
@@ -593,6 +660,18 @@ export default function DashboardClient() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {!loading && !error && hasMore && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={loadMoreComments}
+                    disabled={loadingMore}
+                    className="rounded-md border border-ink-800 px-4 py-2 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loadingMore ? "Loading more..." : "Load more comments"}
+                  </button>
                 </div>
               )}
             </section>
