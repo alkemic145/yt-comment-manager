@@ -152,7 +152,13 @@ export async function GET(request: Request) {
 
     await createAppSession(user.id);
 
-    const redirectUrl = new URL("/dashboard", request.url);
+    const redirectUrl = new URL(
+  "/dashboard",
+  process.env.GOOGLE_REDIRECT_URI!.replace(
+    "/api/auth/google/callback",
+    ""
+  )
+);
     const redirect = NextResponse.redirect(redirectUrl);
     redirect.cookies.set("youtube_oauth_state", "", {
       httpOnly: true,

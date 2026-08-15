@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { Container } from "@/components/ui/Container";
-import { Button } from "@/components/ui/Button";
+import { buttonVariants } from "@/components/ui/Button";
 import { CommentTriagePanel } from "./CommentTriagePanel";
 
 export function Hero() {
@@ -26,13 +26,13 @@ export function Hero() {
               time goes to the people actually talking to you.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg">
-                Connect your channel
+              <a href="/api/auth/google" className={buttonVariants({ size: "lg" })}>
+                Connect with Google
                 <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button variant="secondary" size="lg">
+              </a>
+              <a href="#product" className={buttonVariants({ variant: "secondary", size: "lg" })}>
                 See how it works
-              </Button>
+              </a>
             </div>
             <p className="mt-4 text-xs text-fog-400">
               Free to try. No credit card. Read-only until you approve it.

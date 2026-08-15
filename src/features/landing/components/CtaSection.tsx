@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { Container } from "@/components/ui/Container";
-import { Button } from "@/components/ui/Button";
+import { buttonVariants } from "@/components/ui/Button";
 
 export function CtaSection() {
   return (
@@ -16,10 +16,10 @@ export function CtaSection() {
               you&apos;ve even replied to today&apos;s.
             </p>
           </div>
-          <Button size="lg" className="shrink-0">
-            Connect your channel
+          <a href="/api/auth/google" className={buttonVariants({ size: "lg" }) + " shrink-0"}>
+            Connect with Google
             <ArrowRight className="h-4 w-4" />
-          </Button>
+          </a>
         </div>
       </Container>
     </section>
