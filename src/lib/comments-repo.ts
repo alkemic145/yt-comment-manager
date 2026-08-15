@@ -11,6 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface StoredComment {
   comment_id: string;
+  connection_id: number | null;
   video_id: string | null;
   text: string | null;
   author: string | null;
@@ -47,7 +48,7 @@ export async function getCommentForUser(
   const { data, error } = await supabase
     .from("comments")
     .select(
-      "comment_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at"
+      "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at"
     )
     .eq("user_id", userId)
     .eq("comment_id", commentId)
@@ -142,7 +143,7 @@ export async function getCommentsPage(
   const { data, error, count } = await supabase
     .from("comments")
     .select(
-      "comment_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at",
+      "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at",
       { count: "exact" }
     )
     .eq("user_id", userId)
