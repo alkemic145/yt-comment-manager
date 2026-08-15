@@ -10,6 +10,26 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 
 const MAX_REPLY_LENGTH = 10000;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 20;
+const replyHits = new Map<string, number[]>();
+
+function isRateLimited(userId: string) {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const hits = (replyHits.get(userId) ?? []).filter(
+    (timestamp) => timestamp > windowStart
+  );
+
+  if (hits.length >= RATE_LIMIT_MAX) {
+    replyHits.set(userId, hits);
+    return true;
+  }
+
+  hits.push(now);
+  replyHits.set(userId, hits);
+  return false;
+}
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +39,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
+      );
+    }
+
+    if (isRateLimited(user.id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many replies in a short period. Please wait a moment and try again.",
+        },
+        { status: 429 }
       );
     }
 
