@@ -421,7 +421,7 @@ export default function DashboardClient() {
                   </p>
 
                   <p className="mt-1 text-xs text-fog-500">
-                    Your channel doesn't have any comments available yet.
+                    Your channel doesn&apos;t have any comments available yet.
                   </p>
                 </div>
               )}
