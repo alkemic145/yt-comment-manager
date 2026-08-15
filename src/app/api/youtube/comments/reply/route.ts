@@ -85,6 +85,16 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      comment.connection_id !== null &&
+      Number(comment.connection_id) !== Number(connection.id)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Comment does not belong to this channel" },
+        { status: 403 }
+      );
+    }
+
     const accessToken = decryptToken(connection.access_token);
     const refreshToken = connection.refresh_token
       ? decryptToken(connection.refresh_token)
@@ -140,7 +150,10 @@ export async function POST(request: Request) {
       tokenUpdates.access_token = encryptToken(currentAccessToken);
     }
 
-    if (credentials.refresh_token && credentials.refresh_token !== refreshToken) {
+    if (
+      credentials.refresh_token &&
+      credentials.refresh_token !== refreshToken
+    ) {
       tokenUpdates.refresh_token = encryptToken(credentials.refresh_token);
     }
 
