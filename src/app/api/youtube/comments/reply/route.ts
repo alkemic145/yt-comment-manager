@@ -5,7 +5,10 @@ import {
   getConnectionWithTokensForUser,
   updateConnectionTokens,
 } from "@/lib/youtube-connections";
-import { getCommentForUser } from "@/lib/comments-repo";
+import {
+  getCommentForUser,
+  markCommentReplied,
+} from "@/lib/comments-repo";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 
@@ -101,6 +104,18 @@ export async function POST(request: Request) {
         { success: false, error: "Comment not found" },
         { status: 404 }
       );
+    }
+
+    // The local record is our idempotency guard. Once a reply has been
+    // successfully recorded, a double-click/retry returns the existing
+    // reply instead of creating another public YouTube reply.
+    if (comment.reply_id) {
+      return NextResponse.json({
+        success: true,
+        alreadyPosted: true,
+        replyId: comment.reply_id,
+        commentId: comment.comment_id,
+      });
     }
 
     const connection = await getConnectionWithTokensForUser(
@@ -230,10 +245,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const { error: trackingError } = await markCommentReplied(
+      supabase,
+      user.id,
+      comment.comment_id,
+      postedCommentId,
+      trimmedReply
+    );
+
+    if (trackingError) {
+      // The public reply already exists. Do not report a generic posting
+      // failure to the user; return the YouTube ID so the UI can show the
+      // reply succeeded while the tracking issue is visible in server logs.
+      console.error("Reply tracking error:", trackingError);
+    }
+
     return NextResponse.json({
       success: true,
       replyId: postedCommentId,
       commentId: comment.comment_id,
+      alreadyPosted: false,
     });
   } catch (error) {
     console.error("YouTube reply error:", error);
