@@ -87,6 +87,7 @@ export async function POST() {
               video_id: item.snippet?.videoId ?? null,
               text: snippet?.textOriginal ?? snippet?.textDisplay ?? null,
               author: snippet?.authorDisplayName ?? null,
+              author_channel_id: snippet?.authorChannelId?.value ?? null,
               author_image: snippet?.authorProfileImageUrl ?? null,
               like_count: snippet?.likeCount ?? 0,
               reply_count: item.snippet?.totalReplyCount ?? 0,
