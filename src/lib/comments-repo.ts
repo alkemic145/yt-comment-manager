@@ -15,6 +15,7 @@ export interface StoredComment {
   video_id: string | null;
   text: string | null;
   author: string | null;
+  author_channel_id: string | null;
   author_image: string | null;
   like_count: number;
   reply_count: number;
@@ -29,6 +30,7 @@ export interface CommentUpsertInput {
   video_id: string | null;
   text: string | null;
   author: string | null;
+  author_channel_id: string | null;
   author_image: string | null;
   like_count: number;
   reply_count: number;
@@ -44,7 +46,7 @@ export async function getCommentForUser(
   const { data, error } = await supabase
     .from("comments")
     .select(
-      "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at"
+      "comment_id, connection_id, video_id, text, author, author_channel_id, author_image, like_count, reply_count, published_at, updated_at"
     )
     .eq("user_id", userId)
     .eq("comment_id", commentId)
@@ -127,7 +129,7 @@ export async function getCommentsPage(
   const { data, error, count } = await supabase
     .from("comments")
     .select(
-      "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at",
+      "comment_id, connection_id, video_id, text, author, author_channel_id, author_image, like_count, reply_count, published_at, updated_at",
       { count: "exact" }
     )
     .eq("user_id", userId)
