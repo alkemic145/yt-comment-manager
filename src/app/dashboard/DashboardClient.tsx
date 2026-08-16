@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Bell,
   ChevronDown,
@@ -32,8 +33,21 @@ type CommentsResponse = {
     id: string;
     title: string;
   };
-  count?: number;
   comments?: YouTubeComment[];
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
+  hasMore?: boolean;
+  error?: string;
+};
+
+type SyncResponse = {
+  success: boolean;
+  channel?: {
+    id: string;
+    title: string;
+  };
+  synced?: number;
   error?: string;
 };
 
@@ -86,15 +100,22 @@ export default function DashboardClient() {
   const [comments, setComments] = useState<YouTubeComment[]>([]);
   const [channelTitle, setChannelTitle] = useState("Your Channel");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [generatingReplyFor, setGeneratingReplyFor] = useState<string | null>(
     null
   );
-
+  const [postingReplyFor, setPostingReplyFor] = useState<string | null>(null);
   const [aiReplies, setAiReplies] = useState<Record<string, string>>({});
-
   const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({});
+  const [postedReplies, setPostedReplies] = useState<Record<string, string>>(
+    {}
+  );
 
   async function generateReply(comment: YouTubeComment) {
     try {
@@ -147,43 +168,155 @@ export default function DashboardClient() {
     }));
   }
 
+  async function postReply(comment: YouTubeComment) {
+    const reply = aiReplies[comment.comment_id]?.trim();
+
+    if (!reply) {
+      setReplyErrors((current) => ({
+        ...current,
+        [comment.comment_id]: "Reply cannot be empty",
+      }));
+      return;
+    }
+
+    try {
+      setPostingReplyFor(comment.comment_id);
+      setReplyErrors((current) => ({
+        ...current,
+        [comment.comment_id]: "",
+      }));
+
+      const response = await fetch("/api/youtube/comments/reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          commentId: comment.comment_id,
+          reply,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to post reply");
+      }
+
+      setPostedReplies((current) => ({
+        ...current,
+        [comment.comment_id]: data.replyId ?? "posted",
+      }));
+
+      setComments((current) =>
+        current.map((item) =>
+          item.comment_id === comment.comment_id
+            ? { ...item, reply_count: item.reply_count + 1 }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Post reply error:", error);
+
+      setReplyErrors((current) => ({
+        ...current,
+        [comment.comment_id]:
+          error instanceof Error
+            ? error.message
+            : "Failed to post reply to YouTube",
+      }));
+    } finally {
+      setPostingReplyFor(null);
+    }
+  }
+
+  async function loadCommentsPage(pageNum: number, append: boolean) {
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      setError("");
+
+      const response = await fetch(
+        `/api/youtube/comments?page=${pageNum}&pageSize=20`
+      );
+      const data: CommentsResponse = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to load comments");
+      }
+
+      setComments((prev) =>
+        append ? [...prev, ...(data.comments ?? [])] : data.comments ?? []
+      );
+      setPage(pageNum);
+      setHasMore(Boolean(data.hasMore));
+      setTotalCount(data.totalCount ?? 0);
+    } catch (error) {
+      console.error("Dashboard comments error:", error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load YouTube comments"
+      );
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }
+
+  function loadMoreComments() {
+    loadCommentsPage(page + 1, true);
+  }
+
   useEffect(() => {
-    async function loadComments() {
+    async function initialize() {
       try {
         setLoading(true);
         setError("");
 
-        const response = await fetch("/api/youtube/comments");
-        const data: CommentsResponse = await response.json();
+        // Pull the latest comments in from YouTube and save them locally
+        // first, then read the first page back from local storage. Every
+        // subsequent page (via "Load more") reads from storage only --
+        // it never hits YouTube's API again.
+        const syncResponse = await fetch("/api/youtube/comments/sync", {
+          method: "POST",
+        });
+        const syncData: SyncResponse = await syncResponse.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Failed to load comments");
+        if (!syncResponse.ok || !syncData.success) {
+          throw new Error(
+            syncData.error || "Failed to sync YouTube comments"
+          );
         }
 
-        setComments(data.comments ?? []);
-
-        if (data.channel?.title) {
-          setChannelTitle(data.channel.title);
+        if (syncData.channel?.title) {
+          setChannelTitle(syncData.channel.title);
         }
+
+        await loadCommentsPage(1, false);
       } catch (error) {
-        console.error("Dashboard comments error:", error);
+        console.error("Dashboard initialize error:", error);
 
         setError(
           error instanceof Error
             ? error.message
             : "Failed to load YouTube comments"
         );
-      } finally {
         setLoading(false);
       }
     }
 
-    loadComments();
+    initialize();
   }, []);
 
   const stats = useMemo(() => {
-    const total = comments.length;
-
+    // needsReply/replied are computed only from currently loaded pages,
+    // not the full comment history -- total comes from the database's
+    // real count instead, via totalCount.
     const needsReply = comments.filter(
       (comment) => comment.reply_count === 0
     ).length;
@@ -193,11 +326,11 @@ export default function DashboardClient() {
     ).length;
 
     return {
-      total,
+      total: totalCount,
       needsReply,
       replied,
     };
-  }, [comments]);
+  }, [comments, totalCount]);
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50">
@@ -432,9 +565,11 @@ export default function DashboardClient() {
                     const category = getCategory(comment);
                     const isGenerating =
                       generatingReplyFor === comment.comment_id;
-
+                    const isPosting = postingReplyFor === comment.comment_id;
                     const aiReply = aiReplies[comment.comment_id];
                     const aiError = aiErrors[comment.comment_id];
+                    const replyError = replyErrors[comment.comment_id];
+                    const isPosted = Boolean(postedReplies[comment.comment_id]);
 
                     return (
                       <div
@@ -447,9 +582,11 @@ export default function DashboardClient() {
                       >
                         <div className="flex gap-4">
                           {comment.author_image ? (
-                            <img
+                            <Image
                               src={comment.author_image}
                               alt={comment.author}
+                              width={36}
+                              height={36}
                               className="h-9 w-9 shrink-0 rounded-full object-cover"
                             />
                           ) : (
@@ -482,7 +619,7 @@ export default function DashboardClient() {
                             <div className="mt-4 flex flex-wrap items-center gap-2">
                               <button
                                 onClick={() => generateReply(comment)}
-                                disabled={isGenerating}
+                                disabled={isGenerating || isPosting}
                                 className="flex items-center gap-1.5 rounded-md bg-signal-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <Sparkles className="h-3.5 w-3.5" />
@@ -543,12 +680,14 @@ export default function DashboardClient() {
                                     <Sparkles className="h-4 w-4 text-calm-400" />
 
                                     <span className="text-xs font-medium text-calm-300">
-                                      AI suggested reply
+                                      {isPosted
+                                        ? "Reply posted to YouTube"
+                                        : "AI suggested reply"}
                                     </span>
                                   </div>
 
                                   <span className="font-mono text-[9px] uppercase tracking-wide text-fog-600">
-                                    Draft
+                                    {isPosted ? "Posted" : "Draft"}
                                   </span>
                                 </div>
 
@@ -560,32 +699,48 @@ export default function DashboardClient() {
                                       event.target.value
                                     )
                                   }
+                                  disabled={isPosted || isPosting}
                                   rows={3}
-                                  className="mt-3 w-full resize-none rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-sm leading-6 text-paper-50 outline-none placeholder:text-fog-600 focus:border-signal-500/50"
+                                  className="mt-3 w-full resize-none rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-sm leading-6 text-paper-50 outline-none placeholder:text-fog-600 focus:border-signal-500/50 disabled:cursor-not-allowed disabled:opacity-70"
                                 />
 
                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                   <button
-                                    disabled
-                                    className="rounded-md bg-calm-500 px-3 py-1.5 text-xs font-medium text-ink-950 opacity-60"
+                                    onClick={() => postReply(comment)}
+                                    disabled={isPosted || isPosting}
+                                    className="rounded-md bg-calm-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-calm-400 disabled:cursor-not-allowed disabled:opacity-60"
                                   >
-                                    Reply to YouTube
+                                    {isPosting
+                                      ? "Posting..."
+                                      : isPosted
+                                        ? "Posted to YouTube"
+                                        : "Reply to YouTube"}
                                   </button>
 
-                                  <button
-                                    onClick={() =>
-                                      updateAiReply(comment.comment_id, "")
-                                    }
-                                    className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50"
-                                  >
-                                    Clear
-                                  </button>
+                                  {!isPosted && (
+                                    <button
+                                      onClick={() =>
+                                        updateAiReply(comment.comment_id, "")
+                                      }
+                                      disabled={isPosting}
+                                      className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
 
                                   <span className="text-[10px] text-fog-600">
-                                    You can edit the AI suggestion before
-                                    posting.
+                                    {isPosted
+                                      ? "YouTube accepted this reply."
+                                      : "You can edit the AI suggestion before posting."}
                                   </span>
                                 </div>
+
+                                {replyError && !isPosting && (
+                                  <p className="mt-3 text-[11px] text-red-300">
+                                    {replyError}
+                                  </p>
+                                )}
                               </div>
                             )}
                           </div>
@@ -593,6 +748,18 @@ export default function DashboardClient() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {!loading && !error && hasMore && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={loadMoreComments}
+                    disabled={loadingMore}
+                    className="rounded-md border border-ink-800 px-4 py-2 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loadingMore ? "Loading more..." : "Load more comments"}
+                  </button>
                 </div>
               )}
             </section>
