@@ -29,6 +29,7 @@ export async function createAppSession(userId: string) {
     sameSite: "lax",
     path: "/",
     expires: expiresAt,
+    maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
 }
 
@@ -54,11 +55,6 @@ export async function getCurrentUser() {
 
   if (error || !data?.app_users) return null;
 
-  // Supabase's client infers embedded to-one relations like this one
-  // (auth_sessions.user_id -> app_users.id) as an array type when the
-  // client isn't given generated database types, even though it's a
-  // single row at runtime. Handle both shapes defensively rather than
-  // assuming one, so this doesn't silently break if that ever changes.
   const rawAppUser = data.app_users as unknown;
   const appUser = Array.isArray(rawAppUser) ? rawAppUser[0] : rawAppUser;
 
