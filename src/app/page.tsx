@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Hero } from "@/features/landing/components/Hero";
 import { Features } from "@/features/landing/components/Features";
