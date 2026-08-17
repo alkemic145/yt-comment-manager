@@ -323,23 +323,34 @@ export default function DashboardClient() {
         setLoading(true);
         setError("");
 
-        const syncResponse = await fetch("/api/youtube/comments/sync", {
-          method: "POST",
-        });
-
-        const syncData: SyncResponse = await syncResponse.json();
-
-        if (!syncResponse.ok || !syncData.success) {
-          throw new Error(
-            syncData.error || "Failed to sync YouTube comments"
-          );
-        }
-
-        if (syncData.channel?.title) {
-          setChannelTitle(syncData.channel.title);
-        }
-
+        // Load persisted comments first so the dashboard appears quickly.
         await loadCommentsPage(1, false);
+
+        // Sync YouTube comments in the background.
+        try {
+          const syncResponse = await fetch("/api/youtube/comments/sync", {
+            method: "POST",
+          });
+
+          const syncData: SyncResponse = await syncResponse.json();
+
+          if (!syncResponse.ok || !syncData.success) {
+            console.error(
+              "Background YouTube sync failed:",
+              syncData.error || "Unknown sync error"
+            );
+            return;
+          }
+
+          if (syncData.channel?.title) {
+            setChannelTitle(syncData.channel.title);
+          }
+
+          // Refresh the first page so newly synced comments appear.
+          await loadCommentsPage(1, false);
+        } catch (syncError) {
+          console.error("Background YouTube sync error:", syncError);
+        }
       } catch (error) {
         console.error("Dashboard initialize error:", error);
 
