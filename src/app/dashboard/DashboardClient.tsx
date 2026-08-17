@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -56,11 +57,7 @@ type SyncResponse = {
   error?: string;
 };
 
-const navigation = [
-  { label: "Overview", icon: LayoutDashboard, active: true },
-  { label: "Comments", icon: MessageSquare, active: false },
-  { label: "AI Replies", icon: Sparkles, active: false },
-];
+
 
 function formatRelativeTime(dateString: string) {
   const date = new Date(dateString);
@@ -405,24 +402,31 @@ export default function DashboardClient() {
             </p>
 
             <nav className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
+  <Link
+    href="/dashboard"
+    className="flex w-full items-center gap-3 rounded-lg bg-ink-800 px-3 py-2.5 text-sm text-paper-50 transition"
+  >
+    <LayoutDashboard className="h-4 w-4" />
+    Overview
+  </Link>
 
-                return (
-                  <button
-                    key={item.label}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
-                      item.active
-                        ? "bg-ink-800 text-paper-50"
-                        : "text-fog-400 hover:bg-ink-900 hover:text-paper-50"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
+  <Link
+    href="/dashboard/comments"
+    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50"
+  >
+    <MessageSquare className="h-4 w-4" />
+    Comments
+  </Link>
+
+  <button
+    type="button"
+    disabled
+    className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-600"
+  >
+    <Sparkles className="h-4 w-4" />
+    AI Replies
+  </button>
+</nav>
 
             <p className="mb-3 mt-8 px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-fog-500">
               Manage
