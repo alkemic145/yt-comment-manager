@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MessageSquare, Sparkles, Video } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  MessageSquare,
+  Sparkles,
+  Video,
+} from "lucide-react";
 
 type YouTubeComment = {
   comment_id: string;
@@ -37,13 +41,22 @@ type SyncResponse = {
   error?: string;
 };
 
+type Filter = "all" | "needs-reply" | "replied";
+
 function formatRelativeTime(dateString: string) {
   const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
   const seconds = Math.floor(
     (Date.now() - date.getTime()) / 1000
   );
 
-  if (seconds < 60) return "Just now";
+  if (seconds < 60) {
+    return "Just now";
+  }
 
   const minutes = Math.floor(seconds / 60);
 
@@ -66,20 +79,36 @@ function formatRelativeTime(dateString: string) {
   return date.toLocaleDateString();
 }
 
+function isReplied(comment: YouTubeComment) {
+  return (
+    Boolean(comment.reply_id) ||
+    comment.reply_count > 0
+  );
+}
+
+function isNeedsReply(comment: YouTubeComment) {
+  return !isReplied(comment);
+}
+
 export default function CommentsClient() {
-  const [comments, setComments] = useState<YouTubeComment[]>([]);
+  const [comments, setComments] = useState<
+    YouTubeComment[]
+  >([]);
+
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState("");
-  const [channelTitle, setChannelTitle] = useState("Your Channel");
 
-  const [filter, setFilter] = useState<
-    "all" | "needs-reply" | "replied"
-  >("all");
+  const [error, setError] = useState("");
+  const [channelTitle, setChannelTitle] =
+    useState("Your Channel");
+
+  const [filter, setFilter] =
+    useState<Filter>("all");
 
   const [generatingReplyFor, setGeneratingReplyFor] =
     useState<string | null>(null);
@@ -99,7 +128,9 @@ export default function CommentsClient() {
   const [postedReplies, setPostedReplies] =
     useState<Record<string, string>>({});
 
-  async function generateReply(comment: YouTubeComment) {
+  async function generateReply(
+    comment: YouTubeComment
+  ) {
     try {
       setGeneratingReplyFor(comment.comment_id);
 
@@ -108,21 +139,25 @@ export default function CommentsClient() {
         [comment.comment_id]: "",
       }));
 
-      const response = await fetch("/api/ai/reply", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          comment: comment.text,
-        }),
-      });
+      const response = await fetch(
+        "/api/ai/reply",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            comment: comment.text,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error || "Failed to generate reply"
+          data.error ||
+            "Failed to generate reply"
         );
       }
 
@@ -131,7 +166,10 @@ export default function CommentsClient() {
         [comment.comment_id]: data.reply,
       }));
     } catch (error) {
-      console.error("Generate reply error:", error);
+      console.error(
+        "Generate reply error:",
+        error
+      );
 
       setAiErrors((current) => ({
         ...current,
@@ -155,14 +193,19 @@ export default function CommentsClient() {
     }));
   }
 
-  async function postReply(comment: YouTubeComment) {
-    const reply = aiReplies[comment.comment_id]?.trim();
+  async function postReply(
+    comment: YouTubeComment
+  ) {
+    const reply =
+      aiReplies[comment.comment_id]?.trim();
 
     if (!reply) {
       setReplyErrors((current) => ({
         ...current,
-        [comment.comment_id]: "Reply cannot be empty",
+        [comment.comment_id]:
+          "Reply cannot be empty",
       }));
+
       return;
     }
 
@@ -192,7 +235,8 @@ export default function CommentsClient() {
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error || "Failed to post reply"
+          data.error ||
+            "Failed to post reply"
         );
       }
 
@@ -203,25 +247,34 @@ export default function CommentsClient() {
       }));
 
       setComments((current) =>
-        current.map((item) =>
-          item.comment_id === comment.comment_id
-            ? {
-                ...item,
-                reply_count: Math.max(
-                  item.reply_count,
-                  1
-                ),
-                reply_id:
-                  data.replyId ?? item.reply_id,
-                reply_text: reply,
-                replied_at:
-                  new Date().toISOString(),
-              }
-            : item
-        )
+        current.map((item) => {
+          if (
+            item.comment_id !==
+            comment.comment_id
+          ) {
+            return item;
+          }
+
+          return {
+            ...item,
+            reply_count: Math.max(
+              item.reply_count,
+              1
+            ),
+            reply_id:
+              data.replyId ??
+              item.reply_id,
+            reply_text: reply,
+            replied_at:
+              new Date().toISOString(),
+          };
+        })
       );
     } catch (error) {
-      console.error("Post reply error:", error);
+      console.error(
+        "Post reply error:",
+        error
+      );
 
       setReplyErrors((current) => ({
         ...current,
@@ -257,7 +310,8 @@ export default function CommentsClient() {
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error || "Failed to load comments"
+          data.error ||
+            "Failed to load comments"
         );
       }
 
@@ -270,9 +324,17 @@ export default function CommentsClient() {
           : loadedComments
       );
 
-      setPage(data.page ?? pageNumber);
-      setHasMore(Boolean(data.hasMore));
-      setTotalCount(data.totalCount ?? 0);
+      setPage(
+        data.page ?? pageNumber
+      );
+
+      setHasMore(
+        Boolean(data.hasMore)
+      );
+
+      setTotalCount(
+        data.totalCount ?? 0
+      );
     } catch (error) {
       console.error(
         "Comments page error:",
@@ -357,16 +419,29 @@ export default function CommentsClient() {
           );
         }
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
-        setComments(data.comments ?? []);
-        setPage(data.page ?? 1);
-        setHasMore(Boolean(data.hasMore));
+        setComments(
+          data.comments ?? []
+        );
+
+        setPage(
+          data.page ?? 1
+        );
+
+        setHasMore(
+          Boolean(data.hasMore)
+        );
+
         setTotalCount(
           data.totalCount ?? 0
         );
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         console.error(
           "Comments page error:",
@@ -392,38 +467,40 @@ export default function CommentsClient() {
     };
   }, []);
 
-  const filteredComments =
-    comments.filter((comment) => {
+  const needsReplyCount = useMemo(
+    () =>
+      comments.filter(
+        isNeedsReply
+      ).length,
+    [comments]
+  );
+
+  const repliedCount = useMemo(
+    () =>
+      comments.filter(
+        isReplied
+      ).length,
+    [comments]
+  );
+
+  const filteredComments = useMemo(
+    () => {
       if (filter === "needs-reply") {
-        return (
-          !comment.reply_id &&
-          comment.reply_count === 0
+        return comments.filter(
+          isNeedsReply
         );
       }
 
       if (filter === "replied") {
-        return (
-          Boolean(comment.reply_id) ||
-          comment.reply_count > 0
+        return comments.filter(
+          isReplied
         );
       }
 
-      return true;
-    });
-
-  const needsReplyCount =
-    comments.filter(
-      (comment) =>
-        !comment.reply_id &&
-        comment.reply_count === 0
-    ).length;
-
-  const repliedCount =
-    comments.filter(
-      (comment) =>
-        Boolean(comment.reply_id) ||
-        comment.reply_count > 0
-    ).length;
+      return comments;
+    },
+    [comments, filter]
+  );
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50">
@@ -439,14 +516,17 @@ export default function CommentsClient() {
             </h1>
 
             <p className="mt-1 text-xs text-fog-500">
-              {channelTitle} · {totalCount} comments
+              {channelTitle} ·{" "}
+              {totalCount} comments
             </p>
           </div>
 
           <button
             type="button"
             onClick={syncComments}
-            disabled={syncing || loading}
+            disabled={
+              syncing || loading
+            }
             className="flex items-center gap-2 rounded-lg bg-signal-500 px-4 py-2.5 text-xs font-semibold text-ink-950 hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Video className="h-4 w-4" />
@@ -465,7 +545,9 @@ export default function CommentsClient() {
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setFilter("all")}
+                onClick={() =>
+                  setFilter("all")
+                }
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                   filter === "all"
                     ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
@@ -478,21 +560,27 @@ export default function CommentsClient() {
               <button
                 type="button"
                 onClick={() =>
-                  setFilter("needs-reply")
+                  setFilter(
+                    "needs-reply"
+                  )
                 }
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                  filter === "needs-reply"
+                  filter ===
+                  "needs-reply"
                     ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
                     : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
                 }`}
               >
-                Needs reply ({needsReplyCount})
+                Needs reply (
+                {needsReplyCount})
               </button>
 
               <button
                 type="button"
                 onClick={() =>
-                  setFilter("replied")
+                  setFilter(
+                    "replied"
+                  )
                 }
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                   filter === "replied"
@@ -500,7 +588,8 @@ export default function CommentsClient() {
                     : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
                 }`}
               >
-                Replied ({repliedCount})
+                Replied (
+                {repliedCount})
               </button>
             </div>
           )}
@@ -536,8 +625,9 @@ export default function CommentsClient() {
               </p>
 
               <p className="mt-1 text-xs text-fog-500">
-                Sync your YouTube channel to
-                fetch the latest comments.
+                Sync your YouTube
+                channel to fetch
+                the latest comments.
               </p>
             </div>
           )}
@@ -545,12 +635,14 @@ export default function CommentsClient() {
         {!loading &&
           !error &&
           comments.length > 0 &&
-          filteredComments.length === 0 && (
+          filteredComments.length ===
+            0 && (
             <div className="rounded-xl border border-ink-800 p-10 text-center">
               <MessageSquare className="mx-auto h-8 w-8 text-fog-600" />
 
               <p className="mt-3 text-sm font-medium">
-                No comments in this filter
+                No comments in this
+                filter
               </p>
 
               <p className="mt-1 text-xs text-fog-500">
@@ -561,7 +653,8 @@ export default function CommentsClient() {
 
         {!loading &&
           !error &&
-          filteredComments.length > 0 && (
+          filteredComments.length >
+            0 && (
             <div className="overflow-hidden rounded-xl border border-ink-800">
               {filteredComments.map(
                 (comment, index) => {
@@ -589,7 +682,7 @@ export default function CommentsClient() {
                     ];
 
                   const isPosted =
-                    Boolean(comment.reply_id) ||
+                    isReplied(comment) ||
                     Boolean(
                       postedReplies[
                         comment.comment_id
@@ -598,10 +691,13 @@ export default function CommentsClient() {
 
                   return (
                     <div
-                      key={comment.comment_id}
+                      key={
+                        comment.comment_id
+                      }
                       className={`p-5 ${
                         index !==
-                        filteredComments.length - 1
+                        filteredComments.length -
+                          1
                           ? "border-b border-ink-800"
                           : ""
                       }`}
@@ -628,14 +724,16 @@ export default function CommentsClient() {
 
                             <span
                               className={`rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
-                                comment.reply_count >
-                                0
+                                isReplied(
+                                  comment
+                                )
                                   ? "border-calm-500/30 bg-calm-500/10 text-calm-300"
                                   : "border-signal-500/30 bg-signal-500/10 text-signal-300"
                               }`}
                             >
-                              {comment.reply_count >
-                              0
+                              {isReplied(
+                                comment
+                              )
                                 ? "Replied"
                                 : "Needs reply"}
                             </span>
@@ -672,7 +770,9 @@ export default function CommentsClient() {
                             </button>
 
                             <span className="text-[10px] text-fog-600">
-                              {comment.like_count}{" "}
+                              {
+                                comment.like_count
+                              }{" "}
                               {comment.like_count ===
                               1
                                 ? "like"
@@ -680,7 +780,9 @@ export default function CommentsClient() {
                             </span>
 
                             <span className="text-[10px] text-fog-600">
-                              {comment.reply_count}{" "}
+                              {
+                                comment.reply_count
+                              }{" "}
                               {comment.reply_count ===
                               1
                                 ? "reply"
@@ -692,8 +794,8 @@ export default function CommentsClient() {
                             !isGenerating && (
                               <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-4">
                                 <p className="text-xs font-medium text-red-300">
-                                  Could not generate
-                                  reply
+                                  Could not
+                                  generate reply
                                 </p>
 
                                 <p className="mt-1 text-[11px] text-fog-500">
@@ -723,13 +825,16 @@ export default function CommentsClient() {
                               </div>
 
                               <textarea
-                                value={aiReply}
+                                value={
+                                  aiReply
+                                }
                                 onChange={(
                                   event
                                 ) =>
                                   updateAiReply(
                                     comment.comment_id,
-                                    event.target
+                                    event
+                                      .target
                                       .value
                                   )
                                 }
@@ -791,7 +896,9 @@ export default function CommentsClient() {
                               {replyError &&
                                 !isPosting && (
                                   <p className="mt-3 text-[11px] text-red-300">
-                                    {replyError}
+                                    {
+                                      replyError
+                                    }
                                   </p>
                                 )}
                             </div>
