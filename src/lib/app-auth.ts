@@ -68,3 +68,25 @@ export async function requireCurrentUser() {
   if (!user) throw new Error("UNAUTHORIZED");
   return user;
 }
+/**
+ * Ends the current session: removes the session row from the database
+ * (so the token can't be replayed even if the cookie leaks) and clears
+ * the session cookie from the browser.
+ */
+export async function destroyCurrentSession() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+
+  if (token) {
+    const supabase = createSupabaseServerClient();
+    await supabase.from("auth_sessions").delete().eq("token_hash", hashToken(token));
+  }
+
+  cookieStore.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+}

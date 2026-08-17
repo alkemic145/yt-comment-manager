@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   ChevronDown,
   CircleHelp,
   Inbox,
   LayoutDashboard,
+  LogOut,
   MessageSquare,
   MoreHorizontal,
   Settings,
@@ -97,6 +99,8 @@ function getCategory(comment: YouTubeComment) {
 }
 
 export default function DashboardClient() {
+  const router = useRouter();
+
   const [comments, setComments] = useState<YouTubeComment[]>([]);
   const [channelTitle, setChannelTitle] = useState("Your Channel");
   const [loading, setLoading] = useState(true);
@@ -116,6 +120,20 @@ export default function DashboardClient() {
   const [postedReplies, setPostedReplies] = useState<Record<string, string>>(
     {}
   );
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.push("/");
+      router.refresh();
+    }
+  }
 
   async function generateReply(comment: YouTubeComment) {
     try {
@@ -407,7 +425,16 @@ export default function DashboardClient() {
                   </p>
                 </div>
 
-                <ChevronDown className="h-4 w-4 text-fog-500" />
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  title="Log out"
+                  aria-label="Log out"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-fog-500 transition hover:bg-ink-800 hover:text-paper-50 disabled:opacity-50"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </div>
