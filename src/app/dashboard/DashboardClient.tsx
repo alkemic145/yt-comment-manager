@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   ChevronDown,
   CircleHelp,
   Inbox,
   LayoutDashboard,
+  LogOut,
   MessageSquare,
   MoreHorizontal,
   Settings,
@@ -25,6 +28,9 @@ type YouTubeComment = {
   updated_at: string;
   like_count: number;
   reply_count: number;
+  reply_id: string | null;
+  reply_text: string | null;
+  replied_at: string | null;
 };
 
 type CommentsResponse = {
@@ -51,11 +57,7 @@ type SyncResponse = {
   error?: string;
 };
 
-const navigation = [
-  { label: "Overview", icon: LayoutDashboard, active: true },
-  { label: "Comments", icon: MessageSquare, active: false },
-  { label: "AI Replies", icon: Sparkles, active: false },
-];
+
 
 function formatRelativeTime(dateString: string) {
   const date = new Date(dateString);
@@ -97,6 +99,8 @@ function getCategory(comment: YouTubeComment) {
 }
 
 export default function DashboardClient() {
+  const router = useRouter();
+
   const [comments, setComments] = useState<YouTubeComment[]>([]);
   const [channelTitle, setChannelTitle] = useState("Your Channel");
   const [loading, setLoading] = useState(true);
@@ -116,6 +120,20 @@ export default function DashboardClient() {
   const [postedReplies, setPostedReplies] = useState<Record<string, string>>(
     {}
   );
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.push("/");
+      router.refresh();
+    }
+  }
 
   async function generateReply(comment: YouTubeComment) {
     try {
@@ -181,6 +199,7 @@ export default function DashboardClient() {
 
     try {
       setPostingReplyFor(comment.comment_id);
+
       setReplyErrors((current) => ({
         ...current,
         [comment.comment_id]: "",
@@ -211,7 +230,13 @@ export default function DashboardClient() {
       setComments((current) =>
         current.map((item) =>
           item.comment_id === comment.comment_id
-            ? { ...item, reply_count: item.reply_count + 1 }
+            ? {
+                ...item,
+                reply_count: item.reply_count + 1,
+                reply_id: data.replyId ?? null,
+                reply_text: reply,
+                replied_at: new Date().toISOString(),
+              }
             : item
         )
       );
@@ -237,20 +262,37 @@ export default function DashboardClient() {
       } else {
         setLoading(true);
       }
+
       setError("");
 
       const response = await fetch(
         `/api/youtube/comments?page=${pageNum}&pageSize=20`
       );
+
       const data: CommentsResponse = await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Failed to load comments");
       }
 
+      const loadedComments = data.comments ?? [];
+
       setComments((prev) =>
-        append ? [...prev, ...(data.comments ?? [])] : data.comments ?? []
+        append ? [...prev, ...loadedComments] : loadedComments
       );
+
+      setPostedReplies((current) => {
+        const next = { ...current };
+
+        for (const comment of loadedComments) {
+          if (comment.reply_id) {
+            next[comment.comment_id] = comment.reply_id;
+          }
+        }
+
+        return next;
+      });
+
       setPage(pageNum);
       setHasMore(Boolean(data.hasMore));
       setTotalCount(data.totalCount ?? 0);
@@ -278,26 +320,34 @@ export default function DashboardClient() {
         setLoading(true);
         setError("");
 
-        // Pull the latest comments in from YouTube and save them locally
-        // first, then read the first page back from local storage. Every
-        // subsequent page (via "Load more") reads from storage only --
-        // it never hits YouTube's API again.
-        const syncResponse = await fetch("/api/youtube/comments/sync", {
-          method: "POST",
-        });
-        const syncData: SyncResponse = await syncResponse.json();
-
-        if (!syncResponse.ok || !syncData.success) {
-          throw new Error(
-            syncData.error || "Failed to sync YouTube comments"
-          );
-        }
-
-        if (syncData.channel?.title) {
-          setChannelTitle(syncData.channel.title);
-        }
-
+        // Load persisted comments first so the dashboard appears quickly.
         await loadCommentsPage(1, false);
+
+        // Sync YouTube comments in the background.
+        try {
+          const syncResponse = await fetch("/api/youtube/comments/sync", {
+            method: "POST",
+          });
+
+          const syncData: SyncResponse = await syncResponse.json();
+
+          if (!syncResponse.ok || !syncData.success) {
+            console.error(
+              "Background YouTube sync failed:",
+              syncData.error || "Unknown sync error"
+            );
+            return;
+          }
+
+          if (syncData.channel?.title) {
+            setChannelTitle(syncData.channel.title);
+          }
+
+          // Refresh the first page so newly synced comments appear.
+          await loadCommentsPage(1, false);
+        } catch (syncError) {
+          console.error("Background YouTube sync error:", syncError);
+        }
       } catch (error) {
         console.error("Dashboard initialize error:", error);
 
@@ -306,6 +356,7 @@ export default function DashboardClient() {
             ? error.message
             : "Failed to load YouTube comments"
         );
+
         setLoading(false);
       }
     }
@@ -314,9 +365,6 @@ export default function DashboardClient() {
   }, []);
 
   const stats = useMemo(() => {
-    // needsReply/replied are computed only from currently loaded pages,
-    // not the full comment history -- total comes from the database's
-    // real count instead, via totalCount.
     const needsReply = comments.filter(
       (comment) => comment.reply_count === 0
     ).length;
@@ -354,24 +402,31 @@ export default function DashboardClient() {
             </p>
 
             <nav className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
+  <Link
+    href="/dashboard"
+    className="flex w-full items-center gap-3 rounded-lg bg-ink-800 px-3 py-2.5 text-sm text-paper-50 transition"
+  >
+    <LayoutDashboard className="h-4 w-4" />
+    Overview
+  </Link>
 
-                return (
-                  <button
-                    key={item.label}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
-                      item.active
-                        ? "bg-ink-800 text-paper-50"
-                        : "text-fog-400 hover:bg-ink-900 hover:text-paper-50"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
+  <Link
+    href="/dashboard/comments"
+    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50"
+  >
+    <MessageSquare className="h-4 w-4" />
+    Comments
+  </Link>
+
+  <button
+    type="button"
+    disabled
+    className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-600"
+  >
+    <Sparkles className="h-4 w-4" />
+    AI Replies
+  </button>
+</nav>
 
             <p className="mb-3 mt-8 px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-fog-500">
               Manage
@@ -386,6 +441,18 @@ export default function DashboardClient() {
               <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
                 <CircleHelp className="h-4 w-4" />
                 Help
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                title="Log out"
+                aria-label="Log out"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <LogOut className="h-4 w-4" />
+                {loggingOut ? "Logging out..." : "Log out"}
               </button>
             </nav>
           </div>
@@ -407,7 +474,6 @@ export default function DashboardClient() {
                   </p>
                 </div>
 
-                <ChevronDown className="h-4 w-4 text-fog-500" />
               </div>
             </div>
           </div>
@@ -428,7 +494,6 @@ export default function DashboardClient() {
             <div className="flex items-center gap-3">
               <button className="relative flex h-9 w-9 items-center justify-center rounded-lg text-fog-400 hover:bg-ink-900 hover:text-paper-50">
                 <Bell className="h-4 w-4" />
-
                 <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-signal-500" />
               </button>
 
@@ -563,13 +628,26 @@ export default function DashboardClient() {
                 <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-950">
                   {comments.map((comment, index) => {
                     const category = getCategory(comment);
+
                     const isGenerating =
                       generatingReplyFor === comment.comment_id;
-                    const isPosting = postingReplyFor === comment.comment_id;
+
+                    const isPosting =
+                      postingReplyFor === comment.comment_id;
+
                     const aiReply = aiReplies[comment.comment_id];
+
+                    const hasGeneratedReply =
+                      comment.comment_id in aiReplies;
+
                     const aiError = aiErrors[comment.comment_id];
-                    const replyError = replyErrors[comment.comment_id];
-                    const isPosted = Boolean(postedReplies[comment.comment_id]);
+
+                    const replyError =
+                      replyErrors[comment.comment_id];
+
+                    const isPosted =
+                      Boolean(comment.reply_id) ||
+                      Boolean(postedReplies[comment.comment_id]);
 
                     return (
                       <div
@@ -631,13 +709,11 @@ export default function DashboardClient() {
                                     : "Generate reply"}
                               </button>
 
-                              <button className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50">
-                                Mark as done
-                              </button>
-
                               <span className="ml-auto text-[10px] text-fog-600">
                                 {comment.like_count}{" "}
-                                {comment.like_count === 1 ? "like" : "likes"}
+                                {comment.like_count === 1
+                                  ? "like"
+                                  : "likes"}
                               </span>
 
                               <button className="rounded-md p-1.5 text-fog-600 hover:bg-ink-900 hover:text-fog-300">
@@ -673,8 +749,8 @@ export default function DashboardClient() {
                               </div>
                             )}
 
-                            {aiReply && !isGenerating && (
-                              <div className="mt-4 rounded-lg border border-calm-500/20 bg-calm-500/5 p-4">
+                            {hasGeneratedReply && (
+                              <div className="mt-4 rounded-lg border border-calm-500/40 bg-calm-500/10 p-4 ring-1 ring-calm-500/30">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-2">
                                     <Sparkles className="h-4 w-4 text-calm-400" />
@@ -707,8 +783,12 @@ export default function DashboardClient() {
                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                   <button
                                     onClick={() => postReply(comment)}
-                                    disabled={isPosted || isPosting}
-                                    className="rounded-md bg-calm-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-calm-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={
+                                      isPosted ||
+                                      isPosting ||
+                                      !aiReply?.trim()
+                                    }
+                                    className="rounded-md bg-signal-500 px-4 py-2 text-xs font-semibold text-ink-950 shadow-sm hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
                                   >
                                     {isPosting
                                       ? "Posting..."
@@ -720,7 +800,10 @@ export default function DashboardClient() {
                                   {!isPosted && (
                                     <button
                                       onClick={() =>
-                                        updateAiReply(comment.comment_id, "")
+                                        updateAiReply(
+                                          comment.comment_id,
+                                          ""
+                                        )
                                       }
                                       disabled={isPosting}
                                       className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -732,7 +815,9 @@ export default function DashboardClient() {
                                   <span className="text-[10px] text-fog-600">
                                     {isPosted
                                       ? "YouTube accepted this reply."
-                                      : "You can edit the AI suggestion before posting."}
+                                      : !aiReply?.trim()
+                                        ? "Type a reply before posting."
+                                        : "You can edit the AI suggestion before posting."}
                                   </span>
                                 </div>
 
@@ -758,7 +843,9 @@ export default function DashboardClient() {
                     disabled={loadingMore}
                     className="rounded-md border border-ink-800 px-4 py-2 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {loadingMore ? "Loading more..." : "Load more comments"}
+                    {loadingMore
+                      ? "Loading more..."
+                      : "Load more comments"}
                   </button>
                 </div>
               )}
@@ -816,9 +903,13 @@ function StatCard({
         )}
       </div>
 
-      <p className="mt-4 text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-4 text-2xl font-semibold tracking-tight">
+        {value}
+      </p>
 
-      <p className="mt-1 truncate text-[11px] text-fog-500">{detail}</p>
+      <p className="mt-1 truncate text-[11px] text-fog-500">
+        {detail}
+      </p>
     </div>
   );
 }

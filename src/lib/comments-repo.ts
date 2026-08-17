@@ -18,6 +18,9 @@ export interface StoredComment {
   author_image: string | null;
   like_count: number;
   reply_count: number;
+  reply_id: string | null;
+  reply_text: string | null;
+  replied_at: string | null;
   published_at: string | null;
   updated_at: string | null;
 }
@@ -36,6 +39,9 @@ export interface CommentUpsertInput {
   updated_at: string | null;
 }
 
+const COMMENT_SELECT =
+  "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, reply_id, reply_text, replied_at, published_at, updated_at";
+
 export async function getCommentForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -43,15 +49,32 @@ export async function getCommentForUser(
 ): Promise<StoredComment | null> {
   const { data, error } = await supabase
     .from("comments")
-    .select(
-      "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at"
-    )
+    .select(COMMENT_SELECT)
     .eq("user_id", userId)
     .eq("comment_id", commentId)
     .maybeSingle();
 
   if (error) throw error;
   return (data as StoredComment | null) ?? null;
+}
+
+export async function markCommentReplied(
+  supabase: SupabaseClient,
+  userId: string,
+  commentId: string,
+  replyId: string,
+  replyText: string
+) {
+  return supabase
+    .from("comments")
+    .update({
+      reply_id: replyId,
+      reply_text: replyText,
+      replied_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("comment_id", commentId)
+    .is("reply_id", null);
 }
 
 export async function upsertComments(
@@ -126,10 +149,7 @@ export async function getCommentsPage(
 
   const { data, error, count } = await supabase
     .from("comments")
-    .select(
-      "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, published_at, updated_at",
-      { count: "exact" }
-    )
+    .select(COMMENT_SELECT, { count: "exact" })
     .eq("user_id", userId)
     .order("published_at", { ascending: false })
     .range(from, to);

@@ -105,7 +105,7 @@ export async function upsertConnection(
 ) {
   return supabase
     .from("youtube_connections")
-    .upsert(payload, { onConflict: "channel_id" });
+    .upsert(payload, { onConflict: "user_id,channel_id" });
 }
 
 /**
