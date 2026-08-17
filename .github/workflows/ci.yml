@@ -38,7 +38,7 @@ jobs:
       - name: Production build
         run: npm run build
         env:
-          NODE_OPTIONS: --max-old-space-size=6144name: CI
+          NODE_OPTIONS: --max-old-space-size=6144
 
 on:
   pull_request:
