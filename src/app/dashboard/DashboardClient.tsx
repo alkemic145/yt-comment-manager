@@ -27,6 +27,9 @@ type YouTubeComment = {
   updated_at: string;
   like_count: number;
   reply_count: number;
+  reply_id: string | null;
+  reply_text: string | null;
+  replied_at: string | null;
 };
 
 type CommentsResponse = {
@@ -229,7 +232,13 @@ export default function DashboardClient() {
       setComments((current) =>
         current.map((item) =>
           item.comment_id === comment.comment_id
-            ? { ...item, reply_count: item.reply_count + 1 }
+            ? {
+                ...item,
+                reply_count: item.reply_count + 1,
+                reply_id: data.replyId ?? null,
+                reply_text: reply,
+                replied_at: new Date().toISOString(),
+              }
             : item
         )
       );
@@ -266,9 +275,24 @@ export default function DashboardClient() {
         throw new Error(data.error || "Failed to load comments");
       }
 
+      const loadedComments = data.comments ?? [];
+
       setComments((prev) =>
-        append ? [...prev, ...(data.comments ?? [])] : data.comments ?? []
+        append ? [...prev, ...loadedComments] : loadedComments
       );
+
+      setPostedReplies((current) => {
+        const next = { ...current };
+
+        for (const comment of loadedComments) {
+          if (comment.reply_id) {
+            next[comment.comment_id] = comment.reply_id;
+          }
+        }
+
+        return next;
+      });
+
       setPage(pageNum);
       setHasMore(Boolean(data.hasMore));
       setTotalCount(data.totalCount ?? 0);
@@ -596,7 +620,9 @@ export default function DashboardClient() {
                     const aiReply = aiReplies[comment.comment_id];
                     const aiError = aiErrors[comment.comment_id];
                     const replyError = replyErrors[comment.comment_id];
-                    const isPosted = Boolean(postedReplies[comment.comment_id]);
+                    const isPosted =
+                      Boolean(comment.reply_id) ||
+                      Boolean(postedReplies[comment.comment_id]);
 
                     return (
                       <div
