@@ -25,6 +25,14 @@ export interface StoredComment {
   updated_at: string | null;
 }
 
+export interface AutomationComment extends StoredComment {
+  automation_status: "pending" | "processing" | "replied" | "skipped" | "failed";
+  automation_attempts: number;
+  automation_started_at: string | null;
+  automation_completed_at: string | null;
+  automation_error: string | null;
+}
+
 export interface CommentUpsertInput {
   user_id: string;
   connection_id: number | null;
@@ -56,6 +64,25 @@ export async function getCommentForUser(
 
   if (error) throw error;
   return (data as StoredComment | null) ?? null;
+}
+
+export async function claimPendingCommentAutomationJobs(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 10,
+  staleAfterMinutes = 15
+): Promise<AutomationComment[]> {
+  const { data, error } = await supabase.rpc(
+    "claim_pending_comment_automation_jobs",
+    {
+      p_user_id: userId,
+      p_limit: limit,
+      p_stale_after_minutes: staleAfterMinutes,
+    }
+  );
+
+  if (error) throw error;
+  return (data ?? []) as AutomationComment[];
 }
 
 export async function markCommentReplied(
