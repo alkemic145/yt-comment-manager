@@ -3,5 +3,5 @@
 
 drop index if exists public.idx_youtube_connections_channel_id_unique;
 
-create unique index idx_youtube_connections_user_channel_unique
+create unique index if not exists idx_youtube_connections_user_channel_unique
   on public.youtube_connections (user_id, channel_id);
