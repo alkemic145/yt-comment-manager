@@ -1,4 +1,4 @@
-import { google, youtube_v3 } from "googleapis";
+import { google } from "googleapis";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import {
   getConnectionWithTokensForUser,
@@ -16,7 +16,9 @@ export interface YouTubeCommentContext {
   conversationContext: string | null;
 }
 
-function createYouTubeClient(connection: Awaited<ReturnType<typeof getConnectionWithTokensForUser>>) {
+function createYouTubeClient(
+  connection: Awaited<ReturnType<typeof getConnectionWithTokensForUser>>
+) {
   if (!connection) throw new Error("No connected YouTube channel found");
 
   const accessToken = decryptToken(connection.access_token);
@@ -38,13 +40,18 @@ function createYouTubeClient(connection: Awaited<ReturnType<typeof getConnection
       : undefined,
   });
 
-  return { oauth2Client, youtube: google.youtube({ version: "v3", auth: oauth2Client }) };
+  return {
+    oauth2Client,
+    youtube: google.youtube({ version: "v3", auth: oauth2Client }),
+  };
 }
 
 async function persistRefreshedTokens(
   supabase: SupabaseClient,
   userId: string,
-  connection: NonNullable<Awaited<ReturnType<typeof getConnectionWithTokensForUser>>>,
+  connection: NonNullable<
+    Awaited<ReturnType<typeof getConnectionWithTokensForUser>>
+  >,
   oauth2Client: ReturnType<typeof createYouTubeClient>["oauth2Client"]
 ) {
   const currentAccessToken = decryptToken(connection.access_token);
@@ -53,14 +60,31 @@ async function persistRefreshedTokens(
     : undefined;
   const credentials = oauth2Client.credentials;
 
-  const updates: { access_token?: string; refresh_token?: string; expires_at?: string } = {};
-  if (credentials.access_token && credentials.access_token !== currentAccessToken) {
+  const updates: {
+    access_token?: string;
+    refresh_token?: string;
+    expires_at?: string;
+  } = {};
+
+  if (
+    credentials.access_token &&
+    credentials.access_token !== currentAccessToken
+  ) {
     updates.access_token = encryptToken(credentials.access_token);
   }
-  if (credentials.refresh_token && credentials.refresh_token !== currentRefreshToken) {
+
+  if (
+    credentials.refresh_token &&
+    credentials.refresh_token !== currentRefreshToken
+  ) {
     updates.refresh_token = encryptToken(credentials.refresh_token);
   }
-  if (credentials.expiry_date && credentials.expiry_date !== (connection.expires_at ? new Date(connection.expires_at).getTime() : null)) {
+
+  const currentExpiry = connection.expires_at
+    ? new Date(connection.expires_at).getTime()
+    : null;
+
+  if (credentials.expiry_date && credentials.expiry_date !== currentExpiry) {
     updates.expires_at = new Date(credentials.expiry_date).toISOString();
   }
 
