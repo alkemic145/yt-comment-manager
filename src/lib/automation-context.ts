@@ -1,11 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AutomationDecisionInput } from "@/lib/automation-decision";
 import { getCommentForUser } from "@/lib/comments-repo";
-import {
-  getConnectionWithTokensForUser,
-  updateConnectionTokens,
-} from "@/lib/youtube-connections";
-import { getYouTubeCommentContext } from "@/lib/youtube-context";
+import { collectYouTubeCommentContext } from "@/lib/youtube-context";
 
 export interface AutomationContext {
   commentId: string;
@@ -33,36 +29,37 @@ export async function buildAutomationContext(
     throw new Error("Cannot build automation context without a video id.");
   }
 
-  const connection = await getConnectionWithTokensForUser(supabase, userId);
-  if (!connection) throw new Error("No connected YouTube channel found.");
-
-  const context = await getYouTubeCommentContext({
+  const context = await collectYouTubeCommentContext(
+    supabase,
+    userId,
     commentId,
-    videoId: comment.video_id,
-    accessToken: connection.access_token,
-    refreshToken: connection.refresh_token,
-    expiresAt: connection.expires_at,
-  });
+    {
+      text: comment.text,
+      author: comment.author,
+      video_id: comment.video_id,
+    }
+  );
 
   if (!context.videoTitle) {
     throw new Error("Unable to verify the YouTube video context.");
   }
 
+  const conversationContext = context.conversationContext;
+  const threadReplyCount = conversationContext
+    ? conversationContext.split("\n").filter(Boolean).length
+    : 0;
+
   return {
     commentId,
     userId,
-    author: comment.author,
-    videoId: comment.video_id,
-    threadReplyCount: context.threadReplies.length,
+    author: context.author,
+    videoId: context.videoId,
+    threadReplyCount,
     input: {
-      comment: comment.text,
+      comment: context.comment,
       videoTitle: context.videoTitle,
       videoDescription: context.videoDescription,
-      conversationContext: context.threadReplies.length
-        ? context.threadReplies
-            .map((reply) => `${reply.author}: ${reply.text}`)
-            .join("\n")
-        : null,
+      conversationContext,
     },
   };
 }
