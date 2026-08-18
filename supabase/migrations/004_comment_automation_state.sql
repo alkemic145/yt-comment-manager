@@ -13,11 +13,15 @@ alter table public.comments
 create index if not exists comments_automation_status_idx
   on public.comments (user_id, automation_status, published_at);
 
--- Existing successfully-replied comments must never enter the automatic
--- processing queue after this migration is applied.
+-- Existing comments are historical data. They must not be swept into the
+-- first automatic-reply run. Existing replies are marked replied; all other
+-- existing comments are skipped. New comments inserted after this migration
+-- keep the default `pending` state and are eligible for future automation.
 update public.comments
 set
-  automation_status = 'replied',
-  automation_completed_at = coalesce(automation_completed_at, updated_at)
-where reply_id is not null
-  and automation_status = 'pending';
+  automation_status = case
+    when reply_id is not null then 'replied'
+    else 'skipped'
+  end,
+  automation_completed_at = coalesce(automation_completed_at, now())
+where automation_status = 'pending';
