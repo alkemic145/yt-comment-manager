@@ -194,3 +194,21 @@ export async function getCommentsPage(
     hasMore: from + loaded.length < totalCount,
   };
 }
+
+export async function getUnrepliedComments(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 20
+): Promise<StoredComment[]> {
+  const { data, error } = await supabase
+    .from("comments")
+    .select(COMMENT_SELECT)
+    .eq("user_id", userId)
+    .is("reply_id", null)
+    .order("published_at", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return (data ?? []) as StoredComment[];
+}
