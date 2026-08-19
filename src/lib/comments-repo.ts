@@ -45,6 +45,12 @@ export interface CommentUpsertInput {
   reply_count: number;
   published_at: string | null;
   updated_at: string | null;
+  // These are populated only when YouTube confirms that the connected
+  // creator is the author of an existing reply. They are optional so a
+  // normal sync never clears reply tracking that was already stored.
+  reply_id?: string;
+  reply_text?: string;
+  replied_at?: string;
 }
 
 const COMMENT_SELECT =
