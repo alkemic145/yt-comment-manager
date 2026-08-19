@@ -12,6 +12,75 @@ import {
   type CommentUpsertInput,
 } from "@/lib/comments-repo";
 
+async function findCreatorReply(
+  youtube: ReturnType<typeof google.youtube>,
+  commentId: string,
+  totalReplyCount: number,
+  embeddedReplies: Array<{
+    id?: string | null;
+    snippet?: {
+      authorChannelId?: { value?: string | null } | null;
+      textOriginal?: string | null;
+      publishedAt?: string | null;
+      updatedAt?: string | null;
+    } | null;
+  }>,
+  channelId: string
+) {
+  const findInReplies = (replies: typeof embeddedReplies) =>
+    replies.find(
+      (reply) => reply.snippet?.authorChannelId?.value === channelId
+    );
+
+  const embeddedMatch = findInReplies(embeddedReplies);
+  if (embeddedMatch?.id) {
+    return {
+      reply_id: embeddedMatch.id,
+      reply_text: embeddedMatch.snippet?.textOriginal ?? "",
+      replied_at:
+        embeddedMatch.snippet?.publishedAt ??
+        embeddedMatch.snippet?.updatedAt ??
+        new Date().toISOString(),
+    };
+  }
+
+  // commentThreads.list only includes a limited subset of replies. If the
+  // creator was not in that subset, retrieve the complete reply collection
+  // before deciding that the comment has no creator reply.
+  if (totalReplyCount <= embeddedReplies.length) {
+    return null;
+  }
+
+  let pageToken: string | undefined;
+
+  do {
+    const response = await youtube.comments.list({
+      part: ["snippet"],
+      parentId: commentId,
+      maxResults: 100,
+      pageToken,
+    });
+
+    const replies = response.data.items ?? [];
+    const creatorReply = findInReplies(replies);
+
+    if (creatorReply?.id) {
+      return {
+        reply_id: creatorReply.id,
+        reply_text: creatorReply.snippet?.textOriginal ?? "",
+        replied_at:
+          creatorReply.snippet?.publishedAt ??
+          creatorReply.snippet?.updatedAt ??
+          new Date().toISOString(),
+      };
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return null;
+}
+
 export async function POST() {
   try {
     const user = await getCurrentUser();
@@ -72,32 +141,40 @@ export async function POST() {
         pageToken,
       });
 
-      commentsToStore.push(
-        ...(response.data.items ?? [])
-          .map((item) => {
-            const snippet = item.snippet?.topLevelComment?.snippet;
-            const commentId = item.snippet?.topLevelComment?.id ?? item.id;
+      for (const item of response.data.items ?? []) {
+        const snippet = item.snippet?.topLevelComment?.snippet;
+        const commentId = item.snippet?.topLevelComment?.id ?? item.id;
 
-            if (!commentId) return null;
+        if (!commentId) continue;
 
-            return {
-              user_id: user.id,
-              connection_id: connection.id ? Number(connection.id) : null,
-              comment_id: commentId,
-              video_id: item.snippet?.videoId ?? null,
-              text: snippet?.textOriginal ?? snippet?.textDisplay ?? null,
-              author: snippet?.authorDisplayName ?? null,
-              author_image: snippet?.authorProfileImageUrl ?? null,
-              like_count: snippet?.likeCount ?? 0,
-              reply_count: item.snippet?.totalReplyCount ?? 0,
-              published_at: snippet?.publishedAt ?? null,
-              updated_at: snippet?.updatedAt ?? null,
-            };
-          })
-          .filter(
-            (comment): comment is CommentUpsertInput => comment !== null
-          )
-      );
+        const embeddedReplies = item.replies?.comments ?? [];
+        const totalReplyCount = item.snippet?.totalReplyCount ?? 0;
+        const creatorReply =
+          totalReplyCount > 0
+            ? await findCreatorReply(
+                youtube,
+                commentId,
+                totalReplyCount,
+                embeddedReplies,
+                connection.channel_id
+              )
+            : null;
+
+        commentsToStore.push({
+          user_id: user.id,
+          connection_id: connection.id ? Number(connection.id) : null,
+          comment_id: commentId,
+          video_id: item.snippet?.videoId ?? null,
+          text: snippet?.textOriginal ?? snippet?.textDisplay ?? null,
+          author: snippet?.authorDisplayName ?? null,
+          author_image: snippet?.authorProfileImageUrl ?? null,
+          like_count: snippet?.likeCount ?? 0,
+          reply_count: totalReplyCount,
+          published_at: snippet?.publishedAt ?? null,
+          updated_at: snippet?.updatedAt ?? null,
+          ...(creatorReply ?? {}),
+        });
+      }
 
       pageToken = response.data.nextPageToken ?? undefined;
     } while (pageToken);
