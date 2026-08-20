@@ -6,13 +6,15 @@ function isAuthorized(request: Request) {
   const secret = process.env.AUTOMATION_CRON_SECRET;
   if (!secret) return false;
 
-  const authorization = request.headers.get("authorization");
-  return authorization === `Bearer ${secret}`;
+  return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-async function runScheduledAutomation() {
-  if (!isAuthorized(arguments[0] as Request)) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+async function runScheduledAutomation(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   try {
@@ -24,8 +26,17 @@ async function runScheduledAutomation() {
 
     if (error) throw error;
 
-    const userIds = [...new Set((connections ?? []).map((connection) => connection.user_id))];
-    const results = [];
+    const userIds = [
+      ...new Set((connections ?? []).map((connection) => connection.user_id)),
+    ];
+
+    const results: Array<{
+      userId: string;
+      processed: number;
+      replied: number;
+      failed: number;
+      error?: string;
+    }> = [];
 
     for (const userId of userIds) {
       try {
@@ -43,7 +54,10 @@ async function runScheduledAutomation() {
           processed: 0,
           replied: 0,
           failed: 1,
-          error: error instanceof Error ? error.message : "Failed to process automation",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to process automation",
         });
       }
     }
@@ -63,9 +77,9 @@ async function runScheduledAutomation() {
 }
 
 export async function GET(request: Request) {
-  return runScheduledAutomation.call(null, request);
+  return runScheduledAutomation(request);
 }
 
 export async function POST(request: Request) {
-  return runScheduledAutomation.call(null, request);
+  return runScheduledAutomation(request);
 }
