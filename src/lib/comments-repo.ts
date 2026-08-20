@@ -204,17 +204,59 @@ export async function getCommentsPage(
 export async function getUnrepliedComments(
   supabase: SupabaseClient,
   userId: string,
-  limit = 20
+  limit = 20,
+  maxAgeHours = 24
 ): Promise<StoredComment[]> {
+  const cutoff = new Date(
+    Date.now() - maxAgeHours * 60 * 60 * 1000
+  ).toISOString();
+
   const { data, error } = await supabase
     .from("comments")
     .select(COMMENT_SELECT)
     .eq("user_id", userId)
     .is("reply_id", null)
-    .order("published_at", { ascending: true })
+    .gte("published_at", cutoff)
+    .order("published_at", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
 
   return (data ?? []) as StoredComment[];
+}
+export async function completeCommentAutomationJob(
+  supabase: SupabaseClient,
+  userId: string,
+  commentId: string
+) {
+  const { error } = await supabase
+    .from("comments")
+    .update({
+      automation_status: "replied",
+      automation_completed_at: new Date().toISOString(),
+      automation_error: null,
+    })
+    .eq("user_id", userId)
+    .eq("comment_id", commentId);
+
+  if (error) throw error;
+}
+
+export async function failCommentAutomationJob(
+  supabase: SupabaseClient,
+  userId: string,
+  commentId: string,
+  errorMessage: string
+) {
+  const { error } = await supabase
+    .from("comments")
+    .update({
+      automation_status: "failed",
+      automation_completed_at: new Date().toISOString(),
+      automation_error: errorMessage,
+    })
+    .eq("user_id", userId)
+    .eq("comment_id", commentId);
+
+  if (error) throw error;
 }

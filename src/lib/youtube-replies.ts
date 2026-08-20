@@ -169,6 +169,33 @@ export async function postReplyForUser(
     auth: oauth2Client,
   });
 
+  // Check YouTube for an existing creator reply before posting.
+  const existingReplies = await youtube.comments.list({
+    part: ["snippet"],
+    parentId: comment.comment_id,
+    maxResults: 100,
+  });
+
+  const ownReply = existingReplies.data.items?.find(
+    (item) => item.snippet?.authorChannelId?.value === connection.channel_id
+  );
+
+  if (ownReply?.id) {
+    await markCommentReplied(
+      supabase,
+      userId,
+      comment.comment_id,
+      ownReply.id,
+      ownReply.snippet?.textOriginal ?? ownReply.snippet?.textDisplay ?? ""
+    );
+
+    return {
+      alreadyPosted: true,
+      replyId: ownReply.id,
+      commentId: comment.comment_id,
+    };
+  }
+
   const response = await youtube.comments.insert({
     part: ["snippet"],
     requestBody: {
