@@ -45,9 +45,6 @@ export interface CommentUpsertInput {
   reply_count: number;
   published_at: string | null;
   updated_at: string | null;
-  // These are populated only when YouTube confirms that the connected
-  // creator is the author of an existing reply. They are optional so a
-  // normal sync never clears reply tracking that was already stored.
   reply_id?: string;
   reply_text?: string;
   replied_at?: string;
@@ -76,7 +73,8 @@ export async function claimPendingCommentAutomationJobs(
   supabase: SupabaseClient,
   userId: string,
   limit = 10,
-  staleAfterMinutes = 15
+  staleAfterMinutes = 15,
+  maxAgeHours = 24
 ): Promise<AutomationComment[]> {
   const { data, error } = await supabase.rpc(
     "claim_pending_comment_automation_jobs",
@@ -84,6 +82,7 @@ export async function claimPendingCommentAutomationJobs(
       p_user_id: userId,
       p_limit: limit,
       p_stale_after_minutes: staleAfterMinutes,
+      p_max_age_hours: maxAgeHours,
     }
   );
 
@@ -114,9 +113,7 @@ export async function upsertComments(
   supabase: SupabaseClient,
   comments: CommentUpsertInput[]
 ) {
-  if (comments.length === 0) {
-    return { error: null };
-  }
+  if (comments.length === 0) return { error: null };
 
   const rows = comments.map((comment) => ({
     ...comment,
@@ -135,9 +132,7 @@ export async function upsertCommentsInBatches(
 ) {
   const deduped = new Map<string, CommentUpsertInput>();
 
-  for (const comment of comments) {
-    deduped.set(comment.comment_id, comment);
-  }
+  for (const comment of comments) deduped.set(comment.comment_id, comment);
 
   const uniqueComments = Array.from(deduped.values());
 
@@ -207,9 +202,7 @@ export async function getUnrepliedComments(
   limit = 20,
   maxAgeHours = 24
 ): Promise<StoredComment[]> {
-  const cutoff = new Date(
-    Date.now() - maxAgeHours * 60 * 60 * 1000
-  ).toISOString();
+  const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
     .from("comments")
@@ -221,9 +214,9 @@ export async function getUnrepliedComments(
     .limit(limit);
 
   if (error) throw error;
-
   return (data ?? []) as StoredComment[];
 }
+
 export async function completeCommentAutomationJob(
   supabase: SupabaseClient,
   userId: string,
