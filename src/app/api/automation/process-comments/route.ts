@@ -26,6 +26,20 @@ export async function POST() {
 
     const supabase = createSupabaseServerClient();
 
+    const { data: connection } = await supabase
+      .from("youtube_connections")
+      .select("automation_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!connection?.automation_enabled) {
+      return NextResponse.json({
+        success: true,
+        processed: 0,
+        message: "Automation is disabled.",
+      });
+    }
+
     const comments = await claimPendingCommentAutomationJobs(
       supabase,
       user.id,
