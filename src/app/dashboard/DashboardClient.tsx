@@ -433,10 +433,10 @@ export default function DashboardClient() {
             </p>
 
             <nav className="space-y-1">
-              <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
+              <Link href="/dashboard/settings" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
                 <Settings className="h-4 w-4" />
                 Settings
-              </button>
+              </Link>
 
               <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
                 <CircleHelp className="h-4 w-4" />
