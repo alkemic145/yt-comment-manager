@@ -7,6 +7,7 @@ import {
 } from "@/lib/comments-repo";
 import { generateReply } from "@/lib/ai/generate-reply";
 import { postReplyForUser } from "@/lib/youtube-replies";
+import { classifyComment } from "@/lib/automation-decision";
 
 export const MAX_COMMENTS_PER_RUN = 1;
 export const MAX_COMMENT_AGE_HOURS = 24;
@@ -49,6 +50,23 @@ export async function processAutomationForUser(
 
   for (const comment of comments) {
     try {
+      // Safety gate before generating or posting any reply.
+      const gate = classifyComment({
+        comment: comment.text ?? "",
+      });
+
+      if (gate.decision !== "reply") {
+        results.push({
+          commentId: comment.comment_id,
+          author: comment.author,
+          text: comment.text,
+          success: false,
+          error: `${gate.decision}: ${gate.reason}`,
+        });
+
+        continue;
+      }
+
       const suggestedReply = await generateReply(comment.text ?? "");
 
       const posted = await postReplyForUser(
