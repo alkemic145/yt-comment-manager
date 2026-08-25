@@ -90,17 +90,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Strip any literal occurrence of our prompt delimiter tags from the
-    // untrusted comment text, so a comment can't contain "</comment>" and
-    // break out of the boundary we rely on below.
-
-
     const reply = await generateReply(trimmedComment);
 
-return NextResponse.json({
-  success: true,
-  reply,
-});
+    return NextResponse.json({
+      success: true,
+      reply,
+    });
   } catch (error) {
     console.error("AI reply error:", error);
     return NextResponse.json(

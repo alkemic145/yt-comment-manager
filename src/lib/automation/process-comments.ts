@@ -8,6 +8,7 @@ import {
 import { generateReply } from "@/lib/ai/generate-reply";
 import { postReplyForUser } from "@/lib/youtube-replies";
 import { classifyComment } from "@/lib/automation-decision";
+import { persistAutomationDecision } from "@/lib/automation-decision-persistence";
 
 export const MAX_COMMENTS_PER_RUN = 1;
 export const MAX_COMMENT_AGE_HOURS = 24;
@@ -38,6 +39,12 @@ export async function processAutomationForUser(
     return [];
   }
 
+  const { data: campaign } = await supabase
+    .from("promotion_campaigns")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
   const comments = await claimPendingCommentAutomationJobs(
     supabase,
     userId,
@@ -54,6 +61,12 @@ export async function processAutomationForUser(
       const gate = classifyComment({
         comment: comment.text ?? "",
       });
+      await persistAutomationDecision(
+        supabase,
+        userId,
+        comment.comment_id,
+        gate
+      );
 
       if (gate.decision !== "reply") {
         results.push({
@@ -67,7 +80,10 @@ export async function processAutomationForUser(
         continue;
       }
 
-      const suggestedReply = await generateReply(comment.text ?? "");
+      const suggestedReply = await generateReply(
+        comment.text ?? "",
+        campaign
+      );
 
       const posted = await postReplyForUser(
         supabase,
