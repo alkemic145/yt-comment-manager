@@ -9,6 +9,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * and reviewed once instead of duplicated across routes.
  */
 
+export type CommentFilter = "all" | "needs-reply" | "needs-review" | "replied";
+
 export interface StoredComment {
   comment_id: string;
   connection_id: number | null;
@@ -23,6 +25,9 @@ export interface StoredComment {
   replied_at: string | null;
   published_at: string | null;
   updated_at: string | null;
+  automation_decision?: "reply" | "skip" | "review" | null;
+  automation_decision_reason?: string | null;
+  automation_confidence?: number | null;
 }
 
 export interface AutomationComment extends StoredComment {
@@ -51,7 +56,7 @@ export interface CommentUpsertInput {
 }
 
 const COMMENT_SELECT =
-  "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, reply_id, reply_text, replied_at, published_at, updated_at";
+  "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, reply_id, reply_text, replied_at, published_at, updated_at, automation_decision, automation_decision_reason, automation_confidence";
 
 export async function getCommentForUser(
   supabase: SupabaseClient,
@@ -170,15 +175,26 @@ export async function getCommentsPage(
   supabase: SupabaseClient,
   userId: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  filter: CommentFilter = "all"
 ): Promise<CommentsPage> {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from("comments")
     .select(COMMENT_SELECT, { count: "exact" })
-    .eq("user_id", userId)
+    .eq("user_id", userId);
+
+  if (filter === "needs-review") {
+    query = query.eq("automation_decision", "review");
+  } else if (filter === "needs-reply") {
+    query = query.is("reply_id", null).eq("reply_count", 0);
+  } else if (filter === "replied") {
+    query = query.or("reply_id.not.is.null,reply_count.gt.0");
+  }
+
+  const { data, error, count } = await query
     .order("published_at", { ascending: false })
     .range(from, to);
 

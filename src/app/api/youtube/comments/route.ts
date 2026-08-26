@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getCommentsPage } from "@/lib/comments-repo";
+import { getCommentsPage, type CommentFilter } from "@/lib/comments-repo";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -20,6 +20,13 @@ function parsePositiveInt(
   const truncated = Math.floor(parsed);
   return max ? Math.min(truncated, max) : truncated;
 }
+
+const VALID_FILTERS: Set<CommentFilter> = new Set([
+  "all",
+  "needs-reply",
+  "needs-review",
+  "replied",
+]);
 
 // Reads a page of comments from local storage. This is intentionally
 // separate from POST /api/youtube/comments/sync (which is what actually
@@ -44,8 +51,11 @@ export async function GET(request: Request) {
       MAX_PAGE_SIZE
     );
 
+    const rawFilter = searchParams.get("filter") as CommentFilter;
+    const filter: CommentFilter = VALID_FILTERS.has(rawFilter) ? rawFilter : "all";
+
     const supabase = createSupabaseServerClient();
-    const result = await getCommentsPage(supabase, user.id, page, pageSize);
+    const result = await getCommentsPage(supabase, user.id, page, pageSize, filter);
 
     return NextResponse.json({
       success: true,

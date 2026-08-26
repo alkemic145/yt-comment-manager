@@ -6,7 +6,7 @@ const MAX_PROMOTION_DESCRIPTION_LENGTH = 2000;
 const MAX_PROMOTION_CTA_LENGTH = 200;
 const MAX_PROMOTION_URL_LENGTH = 2048;
 
-type PromotionCampaign = {
+export type PromotionCampaign = {
   title: string;
   promotion_type: string;
   description?: string | null;
@@ -176,7 +176,7 @@ ${sanitizedComment}
 
   try {
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: {
