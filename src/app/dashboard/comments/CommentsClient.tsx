@@ -7,19 +7,29 @@ import {
   Video,
 } from "lucide-react";
 
-type YouTubeComment = {
-  comment_id: string;
-  video_id: string;
-  text: string;
-  author: string;
-  author_image?: string;
-  published_at: string;
-  updated_at: string;
-  like_count: number;
-  reply_count: number;
-  reply_id: string | null;
-  reply_text: string | null;
-  replied_at: string | null;
+  type YouTubeComment = {
+    comment_id: string;
+    video_id: string;
+    text: string;
+    author: string;
+    author_image?: string;
+    published_at: string;
+    updated_at: string;
+    like_count: number;
+    reply_count: number;
+    reply_id: string | null;
+    reply_text: string | null;
+    replied_at: string | null;
+  
+    automation_decision?:
+      | "reply"
+      | "skip"
+      | "review"
+      | null;
+  
+    automation_decision_reason?: string | null;
+    automation_confidence?: number | null;
+  
 };
 
 type CommentsResponse = {
@@ -41,7 +51,11 @@ type SyncResponse = {
   error?: string;
 };
 
-type Filter = "all" | "needs-reply" | "replied";
+type Filter =
+  | "all"
+  | "needs-reply"
+  | "needs-review"
+  | "replied";
 
 function formatRelativeTime(dateString: string) {
   const date = new Date(dateString);
@@ -88,6 +102,10 @@ function isReplied(comment: YouTubeComment) {
 
 function isNeedsReply(comment: YouTubeComment) {
   return !isReplied(comment);
+}
+
+function isNeedsReview(comment: YouTubeComment) {
+  return comment.automation_decision === "review";
 }
 
 export default function CommentsClient() {
@@ -468,39 +486,35 @@ export default function CommentsClient() {
   }, []);
 
   const needsReplyCount = useMemo(
-    () =>
-      comments.filter(
-        isNeedsReply
-      ).length,
+    () => comments.filter(isNeedsReply).length,
+    [comments]
+  );
+
+  const needsReviewCount = useMemo(
+    () => comments.filter(isNeedsReview).length,
     [comments]
   );
 
   const repliedCount = useMemo(
-    () =>
-      comments.filter(
-        isReplied
-      ).length,
+    () => comments.filter(isReplied).length,
     [comments]
   );
 
-  const filteredComments = useMemo(
-    () => {
-      if (filter === "needs-reply") {
-        return comments.filter(
-          isNeedsReply
-        );
-      }
+  const filteredComments = useMemo(() => {
+    if (filter === "needs-review") {
+      return comments.filter(isNeedsReview);
+    }
 
-      if (filter === "replied") {
-        return comments.filter(
-          isReplied
-        );
-      }
+    if (filter === "needs-reply") {
+      return comments.filter(isNeedsReply);
+    }
 
-      return comments;
-    },
-    [comments, filter]
-  );
+    if (filter === "replied") {
+      return comments.filter(isReplied);
+    }
+
+    return comments;
+  }, [comments, filter]);
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50">
@@ -545,9 +559,7 @@ export default function CommentsClient() {
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  setFilter("all")
-                }
+                onClick={() => setFilter("all")}
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                   filter === "all"
                     ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
@@ -559,37 +571,38 @@ export default function CommentsClient() {
 
               <button
                 type="button"
-                onClick={() =>
-                  setFilter(
-                    "needs-reply"
-                  )
-                }
+                onClick={() => setFilter("needs-review")}
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                  filter ===
-                  "needs-reply"
-                    ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
+                  filter === "needs-review"
+                    ? "border-orange-500/50 bg-orange-500/10 text-orange-300"
                     : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
                 }`}
               >
-                Needs reply (
-                {needsReplyCount})
+                Needs Review ({needsReviewCount})
               </button>
 
               <button
                 type="button"
-                onClick={() =>
-                  setFilter(
-                    "replied"
-                  )
-                }
+                onClick={() => setFilter("needs-reply")}
+                className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                  filter === "needs-reply"
+                    ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
+                    : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
+                }`}
+              >
+                Needs Reply ({needsReplyCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilter("replied")}
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                   filter === "replied"
                     ? "border-calm-500/50 bg-calm-500/10 text-calm-300"
                     : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
                 }`}
               >
-                Replied (
-                {repliedCount})
+                Replied ({repliedCount})
               </button>
             </div>
           )}
@@ -724,24 +737,37 @@ export default function CommentsClient() {
 
                             <span
                               className={`rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
-                                isReplied(
-                                  comment
-                                )
+                                comment.automation_decision === "review"
+                                  ? "border-orange-500/30 bg-orange-500/10 text-orange-300"
+                                  : isReplied(comment)
                                   ? "border-calm-500/30 bg-calm-500/10 text-calm-300"
                                   : "border-signal-500/30 bg-signal-500/10 text-signal-300"
                               }`}
                             >
-                              {isReplied(
-                                comment
-                              )
+                              {comment.automation_decision === "review"
+                                ? "Needs Review"
+                                : isReplied(comment)
                                 ? "Replied"
-                                : "Needs reply"}
+                                : "Needs Reply"}
                             </span>
                           </div>
 
                           <p className="mt-2 text-sm leading-6 text-paper-50">
                             {comment.text}
                           </p>
+
+                          {comment.automation_decision === "review" &&
+                            comment.automation_decision_reason && (
+                              <div className="mt-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
+                                <p className="text-[11px] font-mono uppercase tracking-wide text-orange-300">
+                                  Review reason
+                                </p>
+
+                                <p className="mt-1 text-xs text-fog-300">
+                                  {comment.automation_decision_reason}
+                                </p>
+                              </div>
+                            )}
 
                           <div className="mt-4 flex flex-wrap items-center gap-2">
                             <button
