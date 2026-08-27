@@ -13,17 +13,20 @@ export async function GET() {
     const supabase = createSupabaseServerClient();
     const { data: connection, error } = await supabase
       .from("youtube_connections")
-      .select("channel_id, channel_title, automation_enabled, updated_at")
+      .select("channel_id, channel_title, automation_enabled")
       .eq("user_id", user.id)
+      .order("id", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
+      console.error("Fetch settings db error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      automation_enabled: connection?.automation_enabled ?? false,
+      automation_enabled: Boolean(connection?.automation_enabled),
       channel: connection
         ? {
             id: connection.channel_id,
@@ -57,11 +60,11 @@ export async function POST(request: Request) {
       .from("youtube_connections")
       .update({
         automation_enabled: Boolean(enabled),
-        updated_at: new Date().toISOString(),
       })
       .eq("user_id", user.id);
 
     if (error) {
+      console.error("Update settings db error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
