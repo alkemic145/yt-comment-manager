@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { MessageSquare, Sparkles, Video } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  MessageSquare,
+  Sparkles,
+  Video,
+  ShieldAlert,
+  HelpCircle,
+  Heart,
+  UserCheck,
+  Flame,
+} from "lucide-react";
 
 type YouTubeComment = {
   comment_id: string;
@@ -45,26 +54,31 @@ type Filter = "all" | "needs-reply" | "needs-review" | "replied";
 function formatRelativeTime(dateString: string | null) {
   if (!dateString) return "";
   const date = new Date(dateString);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
+  if (Number.isNaN(date.getTime())) return "";
 
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
   if (seconds < 60) return "Just now";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
-
+  if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
 }
 
 function isReplied(comment: YouTubeComment) {
   return Boolean(comment.reply_id) || comment.reply_count > 0;
+}
+
+function getCommenterTier(likeCount: number, replyCount: number) {
+  if (likeCount >= 10 || replyCount >= 5) {
+    return { label: "Super Fan", color: "border-amber-500/30 bg-amber-500/10 text-amber-300", icon: Flame };
+  }
+  if (likeCount >= 2 || replyCount >= 1) {
+    return { label: "Returning", color: "border-purple-500/30 bg-purple-500/10 text-purple-300", icon: Heart };
+  }
+  return { label: "Viewer", color: "border-ink-800 bg-ink-900/50 text-fog-400", icon: UserCheck };
 }
 
 export default function CommentsClient() {
@@ -88,6 +102,8 @@ export default function CommentsClient() {
   const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
   const [replyErrors, setReplyErrors] = useState<Record<string, string>>({});
   const [postedReplies, setPostedReplies] = useState<Record<string, string>>({});
+
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const loadCommentsPage = useCallback(
     async (pageNumber: number, append = false, activeFilter: Filter = filter) => {
@@ -169,6 +185,10 @@ export default function CommentsClient() {
         ...current,
         [comment.comment_id]: data.reply,
       }));
+
+      setTimeout(() => {
+        textareaRefs.current[comment.comment_id]?.focus();
+      }, 50);
     } catch (err) {
       console.error("Generate reply error:", err);
       setAiErrors((current) => ({
@@ -293,37 +313,46 @@ export default function CommentsClient() {
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50">
-      <header className="border-b border-ink-800">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
+      <header className="border-b border-ink-800 bg-ink-900/40 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal-400">
-              Workspace
-            </p>
-            <h1 className="mt-1 text-xl font-semibold">Comments</h1>
-            <p className="mt-1 text-xs text-fog-500">
-              {channelTitle} · {totalCount} comments
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-signal-400">
+                Community Triage
+              </p>
+              <span className="rounded bg-signal-500/10 px-1.5 py-0.5 text-[9px] font-medium text-signal-300">
+                Safe AI
+              </span>
+            </div>
+            <h1 className="mt-0.5 text-lg font-semibold tracking-tight">
+              {channelTitle}
+            </h1>
+            <p className="text-xs text-fog-500">
+              {totalCount} total synced comments
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={syncComments}
-            disabled={syncing || loading}
-            className="flex items-center gap-2 rounded-lg bg-signal-500 px-4 py-2.5 text-xs font-semibold text-ink-950 hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Video className="h-4 w-4" />
-            {syncing ? "Syncing..." : "Sync YouTube"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={syncComments}
+              disabled={syncing || loading}
+              className="flex items-center gap-2 rounded-lg bg-signal-500 px-4 py-2 text-xs font-semibold text-ink-950 transition hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Video className="h-4 w-4" />
+              {syncing ? "Syncing YouTube..." : "Sync Comments"}
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-        {!loading && !error && (
-          <div className="mb-5 flex flex-wrap items-center gap-2">
+      <main className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => handleFilterChange("all")}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+              className={`rounded-lg border px-3.5 py-1.5 text-xs font-medium transition ${
                 filter === "all"
                   ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
                   : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
@@ -335,31 +364,33 @@ export default function CommentsClient() {
             <button
               type="button"
               onClick={() => handleFilterChange("needs-review")}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+              className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-medium transition ${
                 filter === "needs-review"
                   ? "border-orange-500/50 bg-orange-500/10 text-orange-300"
                   : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
               }`}
             >
+              <ShieldAlert className="h-3.5 w-3.5" />
               Needs Review
             </button>
 
             <button
               type="button"
               onClick={() => handleFilterChange("needs-reply")}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+              className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-medium transition ${
                 filter === "needs-reply"
                   ? "border-signal-500/50 bg-signal-500/10 text-signal-300"
                   : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
               }`}
             >
+              <HelpCircle className="h-3.5 w-3.5" />
               Needs Reply
             </button>
 
             <button
               type="button"
               onClick={() => handleFilterChange("replied")}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+              className={`rounded-lg border px-3.5 py-1.5 text-xs font-medium transition ${
                 filter === "replied"
                   ? "border-calm-500/50 bg-calm-500/10 text-calm-300"
                   : "border-ink-800 text-fog-400 hover:border-ink-700 hover:text-paper-50"
@@ -368,10 +399,10 @@ export default function CommentsClient() {
               Replied
             </button>
           </div>
-        )}
+        </div>
 
         {loading && (
-          <div className="rounded-xl border border-ink-800 p-8 text-center">
+          <div className="rounded-xl border border-ink-800 bg-ink-900/20 p-12 text-center">
             <p className="text-sm text-fog-400">Loading comments...</p>
           </div>
         )}
@@ -381,25 +412,25 @@ export default function CommentsClient() {
             <p className="text-sm font-medium text-red-300">
               Could not load comments
             </p>
-            <p className="mt-2 text-xs text-fog-400">{error}</p>
+            <p className="mt-1 text-xs text-fog-400">{error}</p>
           </div>
         )}
 
         {!loading && !error && comments.length === 0 && (
-          <div className="rounded-xl border border-ink-800 p-10 text-center">
+          <div className="rounded-xl border border-ink-800 bg-ink-900/20 p-12 text-center">
             <MessageSquare className="mx-auto h-8 w-8 text-fog-600" />
             <p className="mt-3 text-sm font-medium">No comments found</p>
             <p className="mt-1 text-xs text-fog-500">
               {filter === "all"
-                ? "Sync your YouTube channel to fetch the latest comments."
-                : "No comments match this filter tab."}
+                ? "Click 'Sync Comments' above to pull your latest YouTube activity."
+                : "No comments found matching this filter."}
             </p>
           </div>
         )}
 
         {!loading && !error && comments.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-ink-800">
-            {comments.map((comment, index) => {
+          <div className="divide-y divide-ink-800 rounded-xl border border-ink-800 bg-ink-900/10">
+            {comments.map((comment) => {
               const isGenerating = generatingReplyFor === comment.comment_id;
               const isPosting = postingReplyFor === comment.comment_id;
               const aiReply = aiReplies[comment.comment_id];
@@ -408,25 +439,25 @@ export default function CommentsClient() {
               const isPosted =
                 isReplied(comment) ||
                 Boolean(postedReplies[comment.comment_id]);
+              const tier = getCommenterTier(comment.like_count, comment.reply_count);
+              const TierIcon = tier.icon;
 
               return (
-                <div
-                  key={comment.comment_id}
-                  className={`p-5 ${
-                    index !== comments.length - 1
-                      ? "border-b border-ink-800"
-                      : ""
-                  }`}
-                >
-                  <div className="flex gap-4">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-800 font-mono text-xs text-fog-300">
+                <div key={comment.comment_id} className="p-5 transition hover:bg-ink-900/30">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-800 font-mono text-xs font-semibold text-fog-300">
                       {(comment.author || "?").charAt(0).toUpperCase()}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs text-fog-300">
+                        <span className="font-mono text-xs font-medium text-fog-200">
                           {comment.author || "Anonymous"}
+                        </span>
+
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-medium ${tier.color}`}>
+                          <TierIcon className="h-2.5 w-2.5" />
+                          {tier.label}
                         </span>
 
                         <span className="text-[10px] text-fog-600">
@@ -450,129 +481,109 @@ export default function CommentsClient() {
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm leading-6 text-paper-50">
+                      <p className="mt-2 text-sm leading-relaxed text-paper-50">
                         {comment.text}
                       </p>
 
-                      {comment.automation_decision === "review" &&
-                        comment.automation_decision_reason && (
-                          <div className="mt-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
-                            <p className="text-[11px] font-mono uppercase tracking-wide text-orange-300">
-                              Review reason
-                            </p>
-                            <p className="mt-1 text-xs text-fog-300">
-                              {comment.automation_decision_reason}
-                            </p>
+                      {/* Transparency Card for Review Decision */}
+                      {comment.automation_decision === "review" && (
+                        <div className="mt-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono font-medium uppercase tracking-wider text-orange-300">
+                            <ShieldAlert className="h-3 w-3" />
+                            Safety Review Reason
+                            {comment.automation_confidence && (
+                              <span className="text-fog-500">
+                                ({Math.round(comment.automation_confidence * 100)}% confidence)
+                              </span>
+                            )}
                           </div>
-                        )}
-
-                      <div className="mt-4 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => generateReply(comment)}
-                          disabled={isGenerating || isPosting || isPosted}
-                          className="flex items-center gap-1.5 rounded-md bg-signal-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          {isGenerating
-                            ? "Generating..."
-                            : isPosted
-                            ? "Already replied"
-                            : aiReply
-                            ? "Regenerate reply"
-                            : "Generate reply"}
-                        </button>
-
-                        <span className="text-[10px] text-fog-600">
-                          {comment.like_count}{" "}
-                          {comment.like_count === 1 ? "like" : "likes"}
-                        </span>
-
-                        <span className="text-[10px] text-fog-600">
-                          {comment.reply_count}{" "}
-                          {comment.reply_count === 1 ? "reply" : "replies"}
-                        </span>
-                      </div>
-
-                      {aiError && !isGenerating && (
-                        <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-4">
-                          <p className="text-xs font-medium text-red-300">
-                            Could not generate reply
-                          </p>
-                          <p className="mt-1 text-[11px] text-fog-500">
-                            {aiError}
+                          <p className="mt-1 text-xs text-fog-300">
+                            {comment.automation_decision_reason || "Requires human review before posting."}
                           </p>
                         </div>
                       )}
 
-                      {aiReply && (
-                        <div className="mt-4 rounded-lg border border-calm-500/40 bg-calm-500/10 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              <Sparkles className="h-4 w-4 text-calm-400" />
-                              <span className="text-xs font-medium text-calm-300">
-                                {isPosted
-                                  ? "Reply posted to YouTube"
-                                  : "AI suggested reply"}
-                              </span>
-                            </div>
+                      <div className="mt-3.5 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => generateReply(comment)}
+                          disabled={isGenerating || isPosting || isPosted}
+                          className="flex items-center gap-1.5 rounded-md bg-signal-500 px-3 py-1.5 text-xs font-semibold text-ink-950 transition hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          {isGenerating
+                            ? "Drafting with AI..."
+                            : isPosted
+                            ? "Already Replied"
+                            : aiReply
+                            ? "Regenerate Draft"
+                            : "Draft Reply with AI"}
+                        </button>
 
-                            <span className="font-mono text-[9px] uppercase tracking-wide text-fog-600">
-                              {isPosted ? "Posted" : "Draft"}
+                        <span className="text-[11px] text-fog-500">
+                          {comment.like_count} {comment.like_count === 1 ? "like" : "likes"}
+                        </span>
+
+                        <span className="text-[11px] text-fog-500">
+                          {comment.reply_count} {comment.reply_count === 1 ? "reply" : "replies"}
+                        </span>
+                      </div>
+
+                      {aiError && !isGenerating && (
+                        <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-300">
+                          Could not generate reply: {aiError}
+                        </div>
+                      )}
+
+                      {aiReply && (
+                        <div className="mt-3.5 rounded-lg border border-signal-500/30 bg-signal-500/5 p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-signal-300">
+                              <Sparkles className="h-3.5 w-3.5" />
+                              {isPosted ? "Posted to YouTube" : "AI Suggested Draft"}
+                            </div>
+                            <span className="font-mono text-[10px] uppercase text-fog-500">
+                              {isPosted ? "Published" : "Editable Draft"}
                             </span>
                           </div>
 
                           <textarea
+                            ref={(el) => {
+                              textareaRefs.current[comment.comment_id] = el;
+                            }}
                             value={aiReply}
-                            onChange={(event) =>
-                              updateAiReply(
-                                comment.comment_id,
-                                event.target.value
-                              )
+                            onChange={(e) =>
+                              updateAiReply(comment.comment_id, e.target.value)
                             }
                             disabled={isPosted || isPosting}
-                            rows={3}
-                            className="mt-3 w-full resize-none rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-sm leading-6 text-paper-50 outline-none focus:border-signal-500/50 disabled:cursor-not-allowed disabled:opacity-70"
+                            rows={2}
+                            className="mt-2.5 w-full resize-none rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-sm leading-relaxed text-paper-50 outline-none focus:border-signal-500/50 disabled:opacity-70"
                           />
 
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <div className="mt-3 flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => postReply(comment)}
                               disabled={isPosted || isPosting || !aiReply.trim()}
-                              className="rounded-md bg-signal-500 px-4 py-2 text-xs font-semibold text-ink-950 hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-md bg-signal-500 px-3.5 py-1.5 text-xs font-semibold text-ink-950 transition hover:bg-signal-400 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {isPosting
-                                ? "Posting..."
-                                : isPosted
-                                ? "Posted to YouTube"
-                                : "Reply to YouTube"}
+                              {isPosting ? "Posting to YouTube..." : "Approve & Post"}
                             </button>
 
                             {!isPosted && (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  updateAiReply(comment.comment_id, "")
-                                }
+                                onClick={() => updateAiReply(comment.comment_id, "")}
                                 disabled={isPosting}
-                                className="rounded-md border border-ink-800 px-3 py-1.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-md border border-ink-800 px-2.5 py-1.5 text-xs text-fog-400 transition hover:border-ink-700 hover:text-paper-50"
                               >
-                                Clear
+                                Discard
                               </button>
                             )}
-
-                            <span className="text-[10px] text-fog-600">
-                              {isPosted
-                                ? "YouTube accepted this reply."
-                                : "You can edit the AI suggestion before posting."}
-                            </span>
                           </div>
 
                           {replyError && !isPosting && (
-                            <p className="mt-3 text-[11px] text-red-300">
-                              {replyError}
-                            </p>
+                            <p className="mt-2 text-xs text-red-300">{replyError}</p>
                           )}
                         </div>
                       )}
@@ -585,14 +596,14 @@ export default function CommentsClient() {
         )}
 
         {!loading && !error && hasMore && (
-          <div className="mt-5 flex justify-center">
+          <div className="mt-6 flex justify-center">
             <button
               type="button"
               onClick={() => loadCommentsPage(page + 1, true, filter)}
               disabled={loadingMore}
-              className="rounded-lg border border-ink-800 px-4 py-2.5 text-xs text-fog-400 hover:border-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-ink-800 px-4 py-2 text-xs font-medium text-fog-300 transition hover:border-ink-700 hover:text-paper-50 disabled:opacity-50"
             >
-              {loadingMore ? "Loading more..." : "Load more comments"}
+              {loadingMore ? "Loading more..." : "Load More Comments"}
             </button>
           </div>
         )}

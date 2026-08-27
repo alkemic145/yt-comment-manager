@@ -2,27 +2,78 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
+export async function GET() {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { data: connection, error } = await supabase
+      .from("youtube_connections")
+      .select("channel_id, channel_title, automation_enabled, updated_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      automation_enabled: connection?.automation_enabled ?? false,
+      channel: connection
+        ? {
+            id: connection.channel_id,
+            title: connection.channel_title,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error("Fetch automation settings error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch settings" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
+  try {
+    const user = await getCurrentUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { enabled } = body;
+
+    const supabase = createSupabaseServerClient();
+
+    const { error } = await supabase
+      .from("youtube_connections")
+      .update({
+        automation_enabled: Boolean(enabled),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      automation_enabled: Boolean(enabled),
+    });
+  } catch (error) {
+    console.error("Update automation settings error:", error);
+    return NextResponse.json(
+      { error: "Failed to update settings" },
+      { status: 500 }
+    );
   }
-
-  const { enabled } = await request.json();
-  const supabase = createSupabaseServerClient();
-
-  const { error } = await supabase
-    .from("youtube_connections")
-    .update({ automation_enabled: !!enabled })
-    .eq("user_id", user.id);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({
-    success: true,
-    automation_enabled: !!enabled,
-  });
 }

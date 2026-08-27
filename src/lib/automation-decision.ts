@@ -2,6 +2,7 @@ export type AutomationDecision = "reply" | "skip" | "review";
 
 export type AutomationIntent =
   | "question"
+  | "factual_inquiry"
   | "compliment"
   | "feedback"
   | "criticism"
@@ -38,11 +39,20 @@ const HIGH_RISK_PATTERNS = [
 
 const SPAM_PATTERNS = [
   /(?:https?:\/\/|www\.)\S+/i,
-  /\b(?:buy now|click here|free money|crypto giveaway|dm me)\b/i,
+  /\b(?:buy now|click here|free money|crypto giveaway|dm me|check my channel|sub4sub)\b/i,
 ];
 
 const ABUSE_PATTERNS = [
-  /\b(?:idiot|moron|stupid|shut up)\b/i,
+  /\b(?:idiot|moron|stupid|shut up|scam|fraud|liar|fake)\b/i,
+];
+
+// Inquiries that require specific creator knowledge (gear, pricing, schedule, personal info).
+// If the AI doesn't have verified knowledge, route to REVIEW to prevent hallucinations.
+const FACTUAL_INQUIRY_PATTERNS = [
+  /\b(?:what camera|what mic|what microphone|what gear|what software|what lens|which lens)\b/i,
+  /\b(?:how much is|price|cost|how much does|where do you live|what is your phone|email)\b/i,
+  /\b(?:when is the next|release date|when will you upload|are you single|who is your)\b/i,
+  /\b(?:sponsor|collab|business inquiry|partnership|hire you)\b/i,
 ];
 
 function clampConfidence(value: number): number {
@@ -74,6 +84,7 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
     };
   }
 
+  // 1. High-risk safety check
   if (HIGH_RISK_PATTERNS.some((pattern) => pattern.test(comment))) {
     return {
       decision: "review",
@@ -83,6 +94,7 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
     };
   }
 
+  // 2. Spam filter
   if (SPAM_PATTERNS.some((pattern) => pattern.test(comment))) {
     return {
       decision: "skip",
@@ -92,59 +104,66 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
     };
   }
 
+  // 3. Abuse filter
   if (ABUSE_PATTERNS.some((pattern) => pattern.test(comment))) {
     return {
       decision: "review",
       intent: "abuse",
       confidence: 0.92,
-      reason: "Comment contains potentially abusive language and should be handled conservatively.",
+      reason: "Comment contains critical or potentially abusive language.",
     };
   }
 
-  const hasQuestion = /\?|\b(?:how|what|why|when|where|which|can|could|does|do|is|are|will)\b/i.test(comment);
+  // 4. Anti-Hallucination Guard: Specific factual inquiries go to REVIEW
+  if (FACTUAL_INQUIRY_PATTERNS.some((pattern) => pattern.test(comment))) {
+    return {
+      decision: "review",
+      intent: "factual_inquiry",
+      confidence: 0.95,
+      reason: "Comment asks for specific factual/creator details (gear, pricing, schedule, or business). Sent for review to prevent guessing.",
+    };
+  }
 
+  // 5. Positive engagements -> safe to reply
+  if (/\b(?:love|great|awesome|amazing|helpful|thanks|thank you|good job|nice video|fire|goat)\b/i.test(comment)) {
+    return {
+      decision: "reply",
+      intent: "compliment",
+      confidence: 0.95,
+      reason: "Comment is a safe positive community interaction.",
+    };
+  }
+
+  // 6. General safe questions
+  const hasQuestion = /\?|\b(?:how|what|why|when|where|which|can|could|does|do|is|are|will)\b/i.test(comment);
   if (hasQuestion) {
     return {
       decision: "reply",
       intent: "question",
       confidence: REPLY_CONFIDENCE_THRESHOLD,
-      reason: "Comment appears to be a normal question and is eligible for the next context/knowledge checks.",
+      reason: "Comment is a general community question.",
     };
   }
 
-  if (/\b(?:love|great|awesome|amazing|helpful|thanks|thank you)\b/i.test(comment)) {
-    return {
-      decision: "reply",
-      intent: "compliment",
-      confidence: 0.93,
-      reason: "Comment appears to be a normal positive interaction.",
-    };
-  }
-
+  // 7. Critical feedback -> review
   if (/\b(?:hate|terrible|awful|wrong|disagree|disappointed|bad)\b/i.test(comment)) {
     return {
       decision: "review",
       intent: "criticism",
       confidence: 0.9,
-      reason: "Negative or critical comments require context-aware handling before autonomous replying.",
+      reason: "Negative feedback requires creator review.",
     };
   }
 
-  // Neutral statements are not automatically safe just because they look
-  // harmless. The LLM/context layer can later upgrade these to REPLY.
+  // Default: ambiguous comments go to human review
   return {
     decision: "review",
     intent: "unknown",
-    confidence: 0.65,
-    reason: "Intent is ambiguous without additional context.",
+    confidence: 0.7,
+    reason: "Intent is ambiguous; creator review recommended.",
   };
 }
 
-/**
- * Converts a model-proposed decision into a safe product decision.
- * The model is never allowed to bypass hard safety rules or the confidence
- * threshold.
- */
 export function applyDecisionGuard(
   proposed: AutomationDecisionResult,
   input: AutomationDecisionInput
