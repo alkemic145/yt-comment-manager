@@ -39,30 +39,33 @@ const HIGH_RISK_PATTERNS = [
 
 const SPAM_PATTERNS = [
   /(?:https?:\/\/|www\.)\S+/i,
-  /\b(?:buy now|click here|free money|crypto giveaway|dm me|check my channel|sub4sub)\b/i,
+  /\b(?:buy now|click here|free money|crypto giveaway|dm me|check my channel|sub4sub|telegram)\b/i,
 ];
 
 const ABUSE_PATTERNS = [
-  /\b(?:idiot|moron|stupid|shut up|scam|fraud|liar|fake)\b/i,
+  /\b(?:idiot|moron|stupid|shut up|scam|fraud|liar|fake|trash|garbage|clown)\b/i,
 ];
 
-// Inquiries that require specific creator knowledge (gear, pricing, schedule, personal info).
-// If the AI doesn't have verified knowledge, route to REVIEW to prevent hallucinations.
+// Specific factual questions that require real knowledge (gear, prices, dates, personal info)
 const FACTUAL_INQUIRY_PATTERNS = [
   /\b(?:what camera|what mic|what microphone|what gear|what software|what lens|which lens)\b/i,
-  /\b(?:how much is|price|cost|how much does|where do you live|what is your phone|email)\b/i,
-  /\b(?:when is the next|release date|when will you upload|are you single|who is your)\b/i,
+  /\b(?:how much is|how much does|what price|course cost|where do you live|phone number)\b/i,
+  /\b(?:when is the next|upload schedule|release date|are you married|who is your)\b/i,
   /\b(?:sponsor|collab|business inquiry|partnership|hire you)\b/i,
 ];
+
+// Expanded positive words, slang, and compliments
+const POSITIVE_WORDS =
+  /\b(?:love|loved|great|awesome|amazing|helpful|thanks|thank you|thx|tysm|nice|good|cool|best|super|wonderful|brilliant|fantastic|beautiful|pretty|clean|fire|goat|legend|masterpiece|underrated|keep it up|w|w video|excited|proud|fav|favorite)\b/i;
+
+// Emojis representing praise, love, and positivity
+const POSITIVE_EMOJIS =
+  /[\u{1F600}-\u{1F60F}\u{1F618}\u{1F60D}\u{1F970}\u{1F929}\u{1F60A}\u{1F604}\u{1F525}\u{2764}\u{FE0F}\u{1F44D}\u{1F44F}\u{1F64F}\u{1F389}\u{1F4AF}\u{1F929}\u{1F973}]/u;
 
 function clampConfidence(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-/**
- * Conservative deterministic gate used before an LLM is ever allowed to
- * recommend an automatic reply. This is intentionally fail-closed.
- */
 export function classifyComment(input: AutomationDecisionInput): AutomationDecisionResult {
   const comment = input.comment.trim();
 
@@ -84,13 +87,13 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
     };
   }
 
-  // 1. High-risk safety check
+  // 1. High-risk safety
   if (HIGH_RISK_PATTERNS.some((pattern) => pattern.test(comment))) {
     return {
       decision: "review",
       intent: "high_risk",
       confidence: 0.98,
-      reason: "Comment matches a high-risk topic that should not receive an autonomous reply.",
+      reason: "Comment matches a high-risk topic. Sent to review.",
     };
   }
 
@@ -100,7 +103,7 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
       decision: "skip",
       intent: "spam",
       confidence: 0.97,
-      reason: "Comment matches a common spam or unsolicited-promotion pattern.",
+      reason: "Matches spam pattern.",
     };
   }
 
@@ -110,27 +113,27 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
       decision: "review",
       intent: "abuse",
       confidence: 0.92,
-      reason: "Comment contains critical or potentially abusive language.",
+      reason: "Contains potentially hostile language. Sent to review.",
     };
   }
 
-  // 4. Anti-Hallucination Guard: Specific factual inquiries go to REVIEW
+  // 4. Factual gear/pricing questions -> Needs Review
   if (FACTUAL_INQUIRY_PATTERNS.some((pattern) => pattern.test(comment))) {
     return {
       decision: "review",
       intent: "factual_inquiry",
       confidence: 0.95,
-      reason: "Comment asks for specific factual/creator details (gear, pricing, schedule, or business). Sent for review to prevent guessing.",
+      reason: "Asks for specific creator details (gear, pricing, schedule). Sent to review to prevent guessing.",
     };
   }
 
-  // 5. Positive engagements -> safe to reply
-  if (/\b(?:love|great|awesome|amazing|helpful|thanks|thank you|good job|nice video|fire|goat)\b/i.test(comment)) {
+  // 5. Positive compliments, appreciation, or positive emojis (e.g. "Nice things🥰❤", "Loved it!", "🔥")
+  if (POSITIVE_WORDS.test(comment) || POSITIVE_EMOJIS.test(comment)) {
     return {
       decision: "reply",
       intent: "compliment",
       confidence: 0.95,
-      reason: "Comment is a safe positive community interaction.",
+      reason: "Positive community compliment or appreciation.",
     };
   }
 
@@ -141,12 +144,12 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
       decision: "reply",
       intent: "question",
       confidence: REPLY_CONFIDENCE_THRESHOLD,
-      reason: "Comment is a general community question.",
+      reason: "General viewer question.",
     };
   }
 
-  // 7. Critical feedback -> review
-  if (/\b(?:hate|terrible|awful|wrong|disagree|disappointed|bad)\b/i.test(comment)) {
+  // 7. Negative criticism -> Review
+  if (/\b(?:hate|terrible|awful|wrong|disagree|disappointed|bad|worst)\b/i.test(comment)) {
     return {
       decision: "review",
       intent: "criticism",
@@ -155,7 +158,17 @@ export function classifyComment(input: AutomationDecisionInput): AutomationDecis
     };
   }
 
-  // Default: ambiguous comments go to human review
+  // 8. Short comments (< 5 words) that aren't negative are safe to acknowledge
+  const wordCount = comment.split(/\s+/).length;
+  if (wordCount <= 5) {
+    return {
+      decision: "reply",
+      intent: "compliment",
+      confidence: 0.9,
+      reason: "Short casual engagement.",
+    };
+  }
+
   return {
     decision: "review",
     intent: "unknown",

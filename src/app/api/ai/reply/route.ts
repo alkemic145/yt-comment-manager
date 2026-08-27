@@ -96,11 +96,15 @@ export async function POST(request: Request) {
       success: true,
       reply,
     });
-  } catch (error) {
+  }  catch (error) {
     console.error("AI reply error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to generate AI reply" },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to generate AI reply",
+      },
       { status: 500 }
-    );
+    ); 
   }
+
 }
