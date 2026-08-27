@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Megaphone, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { Megaphone, CheckCircle2, AlertCircle } from "lucide-react";
 
 type Campaign = {
   title: string;
@@ -115,7 +115,7 @@ export default function PromotionPage() {
             Promotion Campaign
           </h1>
           <p className="mt-1 text-xs text-fog-400">
-            Configure your offer (course, product, service). The AI mentions this <strong>only</strong> when a commenter directly asks or when it's genuinely relevant.
+            Configure your offer (course, product, service). The AI mentions this <strong>only</strong> when a commenter directly asks or when it&apos;s genuinely relevant.
           </p>
         </div>
 

@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import {
   ShieldCheck,
   Zap,
-  Sparkles,
   CheckCircle2,
-  AlertCircle,
   Video,
 } from "lucide-react";
 
