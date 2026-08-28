@@ -38,29 +38,42 @@ execute function update_promotion_campaign_updated_at();
 
 alter table promotion_campaigns enable row level security;
 
+feature/needs-review-dashboard
 -- ✅ AFTER (Safe and idempotent):
 drop policy if exists "Users can view their own campaigns" on promotion_campaigns;
+=======
+ main
 create policy "Users can view their own campaigns"
 on promotion_campaigns
 for select
 using (auth.uid() = user_id);
 
+feature/needs-review-dashboard
 drop policy if exists "Users can insert their own campaigns" on promotion_campaigns;
 
 create policy "Users can insert their own campaigns"
+=======
+create policy "Users can create their own campaigns"
+ main
 on promotion_campaigns
 for insert
 with check (auth.uid() = user_id);
 
+feature/needs-review-dashboard
 drop policy if exists "Users can update their own campaigns" on promotion_campaigns;
 
+=======
+ main
 create policy "Users can update their own campaigns"
 on promotion_campaigns
 for update
 using (auth.uid() = user_id);
 
+feature/needs-review-dashboard
 drop policy if exists "Users can delete their own campaigns" on promotion_campaigns;
 
+=======
+ main
 create policy "Users can delete their own campaigns"
 on promotion_campaigns
 for delete
