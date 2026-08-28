@@ -1,0 +1,3 @@
+alter table promotion_campaigns
+add constraint promotion_campaigns_user_id_unique
+unique (user_id);

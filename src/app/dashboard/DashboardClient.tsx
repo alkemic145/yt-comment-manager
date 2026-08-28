@@ -433,10 +433,18 @@ export default function DashboardClient() {
             </p>
 
             <nav className="space-y-1">
-              <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
+              <Link
+                href="/dashboard/promotion"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                Promotion Campaign
+              </Link>
+
+              <Link href="/dashboard/settings" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
                 <Settings className="h-4 w-4" />
                 Settings
-              </button>
+              </Link>
 
               <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-fog-400 transition hover:bg-ink-900 hover:text-paper-50">
                 <CircleHelp className="h-4 w-4" />

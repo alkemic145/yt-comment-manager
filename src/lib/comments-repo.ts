@@ -9,6 +9,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * and reviewed once instead of duplicated across routes.
  */
 
+export type CommentFilter = "all" | "needs-reply" | "needs-review" | "replied";
+
 export interface StoredComment {
   comment_id: string;
   connection_id: number | null;
@@ -23,6 +25,17 @@ export interface StoredComment {
   replied_at: string | null;
   published_at: string | null;
   updated_at: string | null;
+  automation_decision?: "reply" | "skip" | "review" | null;
+  automation_decision_reason?: string | null;
+  automation_confidence?: number | null;
+}
+
+export interface AutomationComment extends StoredComment {
+  automation_status: "pending" | "processing" | "replied" | "skipped" | "failed";
+  automation_attempts: number;
+  automation_started_at: string | null;
+  automation_completed_at: string | null;
+  automation_error: string | null;
 }
 
 export interface CommentUpsertInput {
@@ -37,10 +50,13 @@ export interface CommentUpsertInput {
   reply_count: number;
   published_at: string | null;
   updated_at: string | null;
+  reply_id?: string;
+  reply_text?: string;
+  replied_at?: string;
 }
 
 const COMMENT_SELECT =
-  "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, reply_id, reply_text, replied_at, published_at, updated_at";
+  "comment_id, connection_id, video_id, text, author, author_image, like_count, reply_count, reply_id, reply_text, replied_at, published_at, updated_at, automation_decision, automation_decision_reason, automation_confidence";
 
 export async function getCommentForUser(
   supabase: SupabaseClient,
@@ -56,6 +72,27 @@ export async function getCommentForUser(
 
   if (error) throw error;
   return (data as StoredComment | null) ?? null;
+}
+
+export async function claimPendingCommentAutomationJobs(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 10,
+  staleAfterMinutes = 15,
+  maxAgeHours = 24
+): Promise<AutomationComment[]> {
+  const { data, error } = await supabase.rpc(
+    "claim_pending_comment_automation_jobs",
+    {
+      p_user_id: userId,
+      p_limit: limit,
+      p_stale_after_minutes: staleAfterMinutes,
+      p_max_age_hours: maxAgeHours,
+    }
+  );
+
+  if (error) throw error;
+  return (data ?? []) as AutomationComment[];
 }
 
 export async function markCommentReplied(
@@ -81,9 +118,7 @@ export async function upsertComments(
   supabase: SupabaseClient,
   comments: CommentUpsertInput[]
 ) {
-  if (comments.length === 0) {
-    return { error: null };
-  }
+  if (comments.length === 0) return { error: null };
 
   const rows = comments.map((comment) => ({
     ...comment,
@@ -102,9 +137,7 @@ export async function upsertCommentsInBatches(
 ) {
   const deduped = new Map<string, CommentUpsertInput>();
 
-  for (const comment of comments) {
-    deduped.set(comment.comment_id, comment);
-  }
+  for (const comment of comments) deduped.set(comment.comment_id, comment);
 
   const uniqueComments = Array.from(deduped.values());
 
@@ -142,15 +175,26 @@ export async function getCommentsPage(
   supabase: SupabaseClient,
   userId: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  filter: CommentFilter = "all"
 ): Promise<CommentsPage> {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from("comments")
     .select(COMMENT_SELECT, { count: "exact" })
-    .eq("user_id", userId)
+    .eq("user_id", userId);
+
+  if (filter === "needs-review") {
+    query = query.eq("automation_decision", "review");
+  } else if (filter === "needs-reply") {
+    query = query.is("reply_id", null).eq("reply_count", 0);
+  } else if (filter === "replied") {
+    query = query.or("reply_id.not.is.null,reply_count.gt.0");
+  }
+
+  const { data, error, count } = await query
     .order("published_at", { ascending: false })
     .range(from, to);
 
@@ -166,4 +210,62 @@ export async function getCommentsPage(
     totalCount,
     hasMore: from + loaded.length < totalCount,
   };
+}
+
+export async function getUnrepliedComments(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 20,
+  maxAgeHours = 24
+): Promise<StoredComment[]> {
+  const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select(COMMENT_SELECT)
+    .eq("user_id", userId)
+    .is("reply_id", null)
+    .gte("published_at", cutoff)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as StoredComment[];
+}
+
+export async function completeCommentAutomationJob(
+  supabase: SupabaseClient,
+  userId: string,
+  commentId: string
+) {
+  const { error } = await supabase
+    .from("comments")
+    .update({
+      automation_status: "replied",
+      automation_completed_at: new Date().toISOString(),
+      automation_error: null,
+    })
+    .eq("user_id", userId)
+    .eq("comment_id", commentId);
+
+  if (error) throw error;
+}
+
+export async function failCommentAutomationJob(
+  supabase: SupabaseClient,
+  userId: string,
+  commentId: string,
+  errorMessage: string
+) {
+  const { error } = await supabase
+    .from("comments")
+    .update({
+      automation_status: "failed",
+      automation_completed_at: new Date().toISOString(),
+      automation_error: errorMessage,
+    })
+    .eq("user_id", userId)
+    .eq("comment_id", commentId);
+
+  if (error) throw error;
 }

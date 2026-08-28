@@ -1,38 +1,7 @@
-import { google } from "googleapis";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/app-auth";
-import {
-  getConnectionWithTokensForUser,
-  updateConnectionTokens,
-} from "@/lib/youtube-connections";
-import {
-  getCommentForUser,
-  markCommentReplied,
-} from "@/lib/comments-repo";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { decryptToken, encryptToken } from "@/lib/token-crypto";
-
-const MAX_REPLY_LENGTH = 10000;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX = 20;
-const replyHits = new Map<string, number[]>();
-
-function isRateLimited(userId: string) {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const hits = (replyHits.get(userId) ?? []).filter(
-    (timestamp) => timestamp > windowStart
-  );
-
-  if (hits.length >= RATE_LIMIT_MAX) {
-    replyHits.set(userId, hits);
-    return true;
-  }
-
-  hits.push(now);
-  replyHits.set(userId, hits);
-  return false;
-}
+import { postReplyForUser } from "@/lib/youtube-replies";
 
 export async function POST(request: Request) {
   try {
@@ -42,16 +11,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
-      );
-    }
-
-    if (isRateLimited(user.id)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Too many replies in a short period. Please wait a moment and try again.",
-        },
-        { status: 429 }
       );
     }
 
@@ -82,190 +41,25 @@ export async function POST(request: Request) {
       );
     }
 
-    if (trimmedReply.length > MAX_REPLY_LENGTH) {
+    if (trimmedReply.length > 10000) {
       return NextResponse.json(
         {
           success: false,
-          error: `Reply is too long (max ${MAX_REPLY_LENGTH} characters)`,
+          error: "Reply is too long (max 10000 characters)",
         },
         { status: 400 }
       );
     }
 
     const supabase = createSupabaseServerClient();
-    const comment = await getCommentForUser(
+    const result = await postReplyForUser(
       supabase,
       user.id,
-      commentId.trim()
-    );
-
-    if (!comment) {
-      return NextResponse.json(
-        { success: false, error: "Comment not found" },
-        { status: 404 }
-      );
-    }
-
-    // The local record is our idempotency guard. Once a reply has been
-    // successfully recorded, a double-click/retry returns the existing
-    // reply instead of creating another public YouTube reply.
-    if (comment.reply_id) {
-      return NextResponse.json({
-        success: true,
-        alreadyPosted: true,
-        replyId: comment.reply_id,
-        commentId: comment.comment_id,
-      });
-    }
-
-    const connection = await getConnectionWithTokensForUser(
-      supabase,
-      user.id
-    );
-
-    if (!connection) {
-      return NextResponse.json(
-        { success: false, error: "YouTube channel is not connected" },
-        { status: 400 }
-      );
-    }
-
-    if (
-      comment.connection_id !== null &&
-      Number(comment.connection_id) !== Number(connection.id)
-    ) {
-      return NextResponse.json(
-        { success: false, error: "Comment does not belong to this channel" },
-        { status: 403 }
-      );
-    }
-
-    const accessToken = decryptToken(connection.access_token);
-    const refreshToken = connection.refresh_token
-      ? decryptToken(connection.refresh_token)
-      : undefined;
-
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expiry_date: connection.expires_at
-        ? new Date(connection.expires_at).getTime()
-        : undefined,
-    });
-
-    try {
-      await oauth2Client.getAccessToken();
-    } catch (error) {
-      console.error("YouTube token refresh error:", error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "YouTube authorization expired. Please reconnect YouTube.",
-        },
-        { status: 401 }
-      );
-    }
-
-    const credentials = oauth2Client.credentials;
-    const currentAccessToken = credentials.access_token;
-
-    if (!currentAccessToken) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Could not obtain a valid YouTube access token",
-        },
-        { status: 401 }
-      );
-    }
-
-    const tokenUpdates: {
-      access_token?: string;
-      refresh_token?: string;
-      expires_at?: string;
-    } = {};
-
-    if (currentAccessToken !== accessToken) {
-      tokenUpdates.access_token = encryptToken(currentAccessToken);
-    }
-
-    if (
-      credentials.refresh_token &&
-      credentials.refresh_token !== refreshToken
-    ) {
-      tokenUpdates.refresh_token = encryptToken(credentials.refresh_token);
-    }
-
-    if (credentials.expiry_date) {
-      tokenUpdates.expires_at = new Date(
-        credentials.expiry_date
-      ).toISOString();
-    }
-
-    if (Object.keys(tokenUpdates).length > 0) {
-      const { error: tokenUpdateError } = await updateConnectionTokens(
-        supabase,
-        connection.id,
-        user.id,
-        tokenUpdates
-      );
-
-      if (tokenUpdateError) {
-        console.error("YouTube token update error:", tokenUpdateError);
-      }
-    }
-
-    const youtube = google.youtube({
-      version: "v3",
-      auth: oauth2Client,
-    });
-
-    const response = await youtube.comments.insert({
-      part: ["snippet"],
-      requestBody: {
-        snippet: {
-          parentId: comment.comment_id,
-          textOriginal: trimmedReply,
-        },
-      },
-    });
-
-    const postedCommentId = response.data.id;
-
-    if (!postedCommentId) {
-      return NextResponse.json(
-        { success: false, error: "YouTube did not return the posted reply" },
-        { status: 502 }
-      );
-    }
-
-    const { error: trackingError } = await markCommentReplied(
-      supabase,
-      user.id,
-      comment.comment_id,
-      postedCommentId,
+      commentId.trim(),
       trimmedReply
     );
 
-    if (trackingError) {
-      // The public reply already exists. Do not report a generic posting
-      // failure to the user; return the YouTube ID so the UI can show the
-      // reply succeeded while the tracking issue is visible in server logs.
-      console.error("Reply tracking error:", trackingError);
-    }
-
-    return NextResponse.json({
-      success: true,
-      replyId: postedCommentId,
-      commentId: comment.comment_id,
-      alreadyPosted: false,
-    });
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
     console.error("YouTube reply error:", error);
 
@@ -274,12 +68,34 @@ export async function POST(request: Request) {
         ? Number((error as { code?: number }).code)
         : 0;
 
+    if (status === 429) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many replies in a short period. Please wait a moment and try again.",
+        },
+        { status: 429 }
+      );
+    }
+
     if (status === 401 || status === 403) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "YouTube rejected the reply. Please reconnect YouTube and try again.",
+            status === 403
+              ? "YouTube rejected the reply. Please reconnect YouTube and try again."
+              : "YouTube authorization expired. Please reconnect YouTube.",
+        },
+        { status }
+      );
+    }
+
+    if (status === 404 || status === 400 || status === 502) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to post reply",
         },
         { status }
       );

@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - feature/comments-storage
+      - feature/automation-processing
 
 jobs:
   validate:
