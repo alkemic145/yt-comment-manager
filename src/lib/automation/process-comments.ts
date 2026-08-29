@@ -57,10 +57,11 @@ export async function processAutomationForUser(
 
   for (const comment of comments) {
     try {
-      // Safety gate before generating or posting any reply.
+      // Safety gate with comment text & video context before generating or posting
       const gate = classifyComment({
         comment: comment.text ?? "",
       });
+
       await persistAutomationDecision(
         supabase,
         userId,
