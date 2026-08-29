@@ -10,6 +10,8 @@ import {
   Heart,
   UserCheck,
   Flame,
+  Search,
+  X,
 } from "lucide-react";
 
 type YouTubeComment = {
@@ -94,6 +96,7 @@ export default function CommentsClient() {
   const [error, setError] = useState("");
   const [channelTitle, setChannelTitle] = useState("Your Channel");
   const [filter, setFilter] = useState<Filter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [generatingReplyFor, setGeneratingReplyFor] = useState<string | null>(null);
   const [postingReplyFor, setPostingReplyFor] = useState<string | null>(null);
@@ -106,7 +109,12 @@ export default function CommentsClient() {
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const loadCommentsPage = useCallback(
-    async (pageNumber: number, append = false, activeFilter: Filter = filter) => {
+    async (
+      pageNumber: number,
+      append = false,
+      activeFilter: Filter = filter,
+      searchTerm = searchQuery
+    ) => {
       try {
         if (append) {
           setLoadingMore(true);
@@ -116,8 +124,9 @@ export default function CommentsClient() {
 
         setError("");
 
+        const searchParam = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : "";
         const response = await fetch(
-          `/api/youtube/comments?page=${pageNumber}&pageSize=20&filter=${activeFilter}`
+          `/api/youtube/comments?page=${pageNumber}&pageSize=20&filter=${activeFilter}${searchParam}`
         );
 
         const data: CommentsResponse = await response.json();
@@ -145,14 +154,20 @@ export default function CommentsClient() {
         setLoadingMore(false);
       }
     },
-    [filter]
+    [filter, searchQuery]
   );
 
   function handleFilterChange(newFilter: Filter) {
     if (newFilter === filter) return;
     setFilter(newFilter);
     setPage(1);
-    loadCommentsPage(1, false, newFilter);
+    loadCommentsPage(1, false, newFilter, searchQuery);
+  }
+
+  function handleSearch(term: string) {
+    setSearchQuery(term);
+    setPage(1);
+    loadCommentsPage(1, false, filter, term);
   }
 
   async function generateReply(comment: YouTubeComment) {
@@ -296,7 +311,7 @@ export default function CommentsClient() {
         setChannelTitle(data.channel.title);
       }
 
-      await loadCommentsPage(1, false, filter);
+      await loadCommentsPage(1, false, filter, searchQuery);
     } catch (err) {
       console.error("Comment sync error:", err);
       setError(
@@ -308,7 +323,7 @@ export default function CommentsClient() {
   }
 
   useEffect(() => {
-    loadCommentsPage(1, false, "all");
+    loadCommentsPage(1, false, "all", "");
   }, [loadCommentsPage]);
 
   return (
@@ -347,7 +362,8 @@ export default function CommentsClient() {
       </header>
 
       <main className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        {/* Search and Filters Bar */}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -399,6 +415,27 @@ export default function CommentsClient() {
               Replied
             </button>
           </div>
+
+          {/* Search Input */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-fog-500" />
+            <input
+              type="text"
+              placeholder="Search text or author..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full rounded-lg border border-ink-800 bg-ink-900/50 pl-8 pr-7 py-1.5 text-xs text-paper-50 outline-none focus:border-signal-500/50"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => handleSearch("")}
+                className="absolute right-2.5 top-2.5 text-fog-500 hover:text-paper-50"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {loading && (
@@ -421,7 +458,9 @@ export default function CommentsClient() {
             <MessageSquare className="mx-auto h-8 w-8 text-fog-600" />
             <p className="mt-3 text-sm font-medium">No comments found</p>
             <p className="mt-1 text-xs text-fog-500">
-              {filter === "all"
+              {searchQuery
+                ? `No comments matched "${searchQuery}".`
+                : filter === "all"
                 ? "Click 'Sync Comments' above to pull your latest YouTube activity."
                 : "No comments found matching this filter."}
             </p>
@@ -485,7 +524,6 @@ export default function CommentsClient() {
                         {comment.text}
                       </p>
 
-                      {/* Transparency Card for Review Decision */}
                       {comment.automation_decision === "review" && (
                         <div className="mt-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
                           <div className="flex items-center gap-1.5 text-[10px] font-mono font-medium uppercase tracking-wider text-orange-300">
@@ -599,7 +637,7 @@ export default function CommentsClient() {
           <div className="mt-6 flex justify-center">
             <button
               type="button"
-              onClick={() => loadCommentsPage(page + 1, true, filter)}
+              onClick={() => loadCommentsPage(page + 1, true, filter, searchQuery)}
               disabled={loadingMore}
               className="rounded-lg border border-ink-800 px-4 py-2 text-xs font-medium text-fog-300 transition hover:border-ink-700 hover:text-paper-50 disabled:opacity-50"
             >

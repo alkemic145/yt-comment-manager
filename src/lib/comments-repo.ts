@@ -176,7 +176,8 @@ export async function getCommentsPage(
   userId: string,
   page: number,
   pageSize: number,
-  filter: CommentFilter = "all"
+  filter: CommentFilter = "all",
+  search?: string
 ): Promise<CommentsPage> {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -192,6 +193,11 @@ export async function getCommentsPage(
     query = query.is("reply_id", null).eq("reply_count", 0);
   } else if (filter === "replied") {
     query = query.or("reply_id.not.is.null,reply_count.gt.0");
+  }
+
+  if (search && search.trim().length > 0) {
+    const term = search.trim();
+    query = query.or(`text.ilike.%${term}%,author.ilike.%${term}%`);
   }
 
   const { data, error, count } = await query

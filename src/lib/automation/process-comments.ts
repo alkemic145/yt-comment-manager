@@ -7,8 +7,9 @@ import {
 } from "@/lib/comments-repo";
 import { generateReply } from "@/lib/ai/generate-reply";
 import { postReplyForUser } from "@/lib/youtube-replies";
-import { classifyComment } from "@/lib/automation-decision";
+import { classifyComment, type AutomationDecisionInput } from "@/lib/automation-decision";
 import { persistAutomationDecision } from "@/lib/automation-decision-persistence";
+import { buildAutomationContext } from "@/lib/automation-context";
 
 export const MAX_COMMENTS_PER_RUN = 1;
 export const MAX_COMMENT_AGE_HOURS = 24;
@@ -57,10 +58,26 @@ export async function processAutomationForUser(
 
   for (const comment of comments) {
     try {
-      // Safety gate with comment text & video context before generating or posting
-      const gate = classifyComment({
+      // 1. Build rich video & thread context safely
+      let decisionInput: AutomationDecisionInput = {
         comment: comment.text ?? "",
-      });
+      };
+
+      try {
+        const autoContext = await buildAutomationContext(
+          supabase,
+          userId,
+          comment.comment_id
+        );
+        if (autoContext?.input) {
+          decisionInput = autoContext.input;
+        }
+      } catch {
+        // Fallback gracefully to raw comment if video metadata is temporarily unavailable
+      }
+
+      // 2. Safety gate with video context
+      const gate = classifyComment(decisionInput);
 
       await persistAutomationDecision(
         supabase,
@@ -81,11 +98,13 @@ export async function processAutomationForUser(
         continue;
       }
 
+      // 3. Generate grounded reply
       const suggestedReply = await generateReply(
         comment.text ?? "",
         campaign
       );
 
+      // 4. Post to YouTube
       const posted = await postReplyForUser(
         supabase,
         userId,

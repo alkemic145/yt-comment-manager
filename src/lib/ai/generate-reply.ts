@@ -178,6 +178,10 @@ ${sanitizedComment}
           systemInstruction: {
             parts: [{ text: SYSTEM_PROMPT }],
           },
+          generationConfig: {
+            maxOutputTokens: 200,
+            temperature: 0.7,
+          },
           contents: [
             {
               role: "user",
