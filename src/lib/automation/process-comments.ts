@@ -7,10 +7,11 @@ import {
 } from "@/lib/comments-repo";
 import { generateReply } from "@/lib/ai/generate-reply";
 import { postReplyForUser } from "@/lib/youtube-replies";
-import { classifyComment } from "@/lib/automation-decision";
+import { classifyComment, type AutomationDecisionInput } from "@/lib/automation-decision";
 import { persistAutomationDecision } from "@/lib/automation-decision-persistence";
+import { buildAutomationContext } from "@/lib/automation-context";
 
-export const MAX_COMMENTS_PER_RUN = 1;
+export const MAX_COMMENTS_PER_RUN = 5;
 export const MAX_COMMENT_AGE_HOURS = 24;
 
 export interface AutomationProcessResult {
@@ -29,7 +30,7 @@ export async function processAutomationForUser(
 ): Promise<AutomationProcessResult[]> {
   const { data: connection, error: connectionError } = await supabase
     .from("youtube_connections")
-    .select("automation_enabled")
+    .select("automation_enabled, max_comment_age_hours")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -38,6 +39,8 @@ export async function processAutomationForUser(
   if (!connection?.automation_enabled) {
     return [];
   }
+
+  const maxAgeHours = connection.max_comment_age_hours || MAX_COMMENT_AGE_HOURS;
 
   const { data: campaign } = await supabase
     .from("promotion_campaigns")
@@ -50,17 +53,32 @@ export async function processAutomationForUser(
     userId,
     MAX_COMMENTS_PER_RUN,
     15,
-    MAX_COMMENT_AGE_HOURS
+    maxAgeHours
   );
 
   const results: AutomationProcessResult[] = [];
 
   for (const comment of comments) {
     try {
-      // Safety gate before generating or posting any reply.
-      const gate = classifyComment({
+      let decisionInput: AutomationDecisionInput = {
         comment: comment.text ?? "",
-      });
+      };
+
+      try {
+        const autoContext = await buildAutomationContext(
+          supabase,
+          userId,
+          comment.comment_id
+        );
+        if (autoContext?.input) {
+          decisionInput = autoContext.input;
+        }
+      } catch {
+        // Fallback gracefully to comment text if video context is pending
+      }
+
+      const gate = classifyComment(decisionInput);
+
       await persistAutomationDecision(
         supabase,
         userId,

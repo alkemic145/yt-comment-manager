@@ -28,10 +28,6 @@ const VALID_FILTERS: Set<CommentFilter> = new Set([
   "replied",
 ]);
 
-// Reads a page of comments from local storage. This is intentionally
-// separate from POST /api/youtube/comments/sync (which is what actually
-// talks to the YouTube API) -- reads here are fast and free of YouTube
-// API quota cost, since they never leave the database.
 export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
@@ -53,9 +49,10 @@ export async function GET(request: Request) {
 
     const rawFilter = searchParams.get("filter") as CommentFilter;
     const filter: CommentFilter = VALID_FILTERS.has(rawFilter) ? rawFilter : "all";
+    const search = searchParams.get("search") || undefined;
 
     const supabase = createSupabaseServerClient();
-    const result = await getCommentsPage(supabase, user.id, page, pageSize, filter);
+    const result = await getCommentsPage(supabase, user.id, page, pageSize, filter, search);
 
     return NextResponse.json({
       success: true,

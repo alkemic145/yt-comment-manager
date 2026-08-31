@@ -13,7 +13,7 @@ export async function GET() {
     const supabase = createSupabaseServerClient();
     const { data: connection, error } = await supabase
       .from("youtube_connections")
-      .select("channel_id, channel_title, automation_enabled")
+      .select("channel_id, channel_title, automation_enabled, max_comment_age_hours")
       .eq("user_id", user.id)
       .order("id", { ascending: false })
       .limit(1)
@@ -27,6 +27,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       automation_enabled: Boolean(connection?.automation_enabled),
+      max_comment_age_hours: connection?.max_comment_age_hours ?? 24,
       channel: connection
         ? {
             id: connection.channel_id,
@@ -52,15 +53,26 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { enabled } = body;
+    const { enabled, max_comment_age_hours } = body;
+
+    const updates: {
+      automation_enabled?: boolean;
+      max_comment_age_hours?: number;
+    } = {};
+
+    if (enabled !== undefined) {
+      updates.automation_enabled = Boolean(enabled);
+    }
+
+    if (max_comment_age_hours !== undefined) {
+      updates.max_comment_age_hours = Number(max_comment_age_hours);
+    }
 
     const supabase = createSupabaseServerClient();
 
     const { error } = await supabase
       .from("youtube_connections")
-      .update({
-        automation_enabled: Boolean(enabled),
-      })
+      .update(updates)
       .eq("user_id", user.id);
 
     if (error) {
@@ -70,7 +82,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      automation_enabled: Boolean(enabled),
+      ...updates,
     });
   } catch (error) {
     console.error("Update automation settings error:", error);

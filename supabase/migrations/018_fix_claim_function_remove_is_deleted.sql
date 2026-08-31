@@ -1,0 +1,46 @@
+-- Drop old overloads
+drop function if exists public.claim_pending_comment_automation_jobs(uuid, int, int, int);
+drop function if exists public.claim_pending_comment_automation_jobs(text, int, int, int);
+drop function if exists public.claim_pending_comment_automation_jobs;
+
+-- Recreate claim function without the nonexistent is_deleted column
+create or replace function public.claim_pending_comment_automation_jobs(
+  p_user_id uuid,
+  p_limit int default 10,
+  p_stale_after_minutes int default 15,
+  p_max_age_hours int default 24
+)
+returns setof public.comments
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  stale_threshold timestamptz := now() - (p_stale_after_minutes || ' minutes')::interval;
+  age_threshold timestamptz := now() - (p_max_age_hours || ' hours')::interval;
+begin
+  return query
+  with candidate_jobs as (
+    select id
+    from public.comments
+    where user_id = p_user_id
+      and (
+        automation_status = 'pending'
+        or (automation_status = 'processing' and automation_started_at < stale_threshold)
+      )
+      and published_at >= age_threshold
+      and reply_id is null
+    order by published_at desc
+    limit p_limit
+    for update skip locked
+  )
+  update public.comments c
+  set
+    automation_status = 'processing',
+    automation_started_at = now(),
+    automation_attempts = c.automation_attempts + 1
+  from candidate_jobs
+  where c.id = candidate_jobs.id
+  returning c.*;
+end;
+$$;
