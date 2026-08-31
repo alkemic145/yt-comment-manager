@@ -187,20 +187,20 @@ export async function getCommentsPage(
     .select(COMMENT_SELECT, { count: "exact" })
     .eq("user_id", userId);
 
-  // Exact, mutually-exclusive tab filtering rules
+  // Exact filtering rules
   if (filter === "replied") {
-    // 1. Replied tab: ONLY comments where a confirmed reply exists
+    // ONLY comments with a confirmed reply
     query = query.not("reply_id", "is", null);
   } else if (filter === "needs-review") {
-    // 2. Needs Review tab: ONLY unreplied comments flagged for safety review
+    // ONLY unreplied comments flagged for review
     query = query
       .is("reply_id", null)
       .eq("automation_decision", "review");
   } else if (filter === "needs-reply") {
-    // 3. Needs Reply tab: ONLY unreplied comments that are NOT in review
+    // ONLY unreplied comments that are NOT in review
     query = query
       .is("reply_id", null)
-      .or("automation_decision.is.null,automation_decision.in.(reply,skip)");
+      .or("automation_decision.is.null,automation_decision.neq.review");
   }
 
   if (search && search.trim().length > 0) {

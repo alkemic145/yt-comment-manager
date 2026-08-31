@@ -33,15 +33,33 @@ execute function update_promotion_campaign_updated_at();
 
 alter table public.promotion_campaigns enable row level security;
 
--- 1. Select Policy
-drop policy if exists "Users can view their own campaigns" on public.promotion_campaigns;
-create policy "Users can view their own campaigns"
-on public.promotion_campaigns
-for select
-using (auth.uid() = user_id);
 
--- 2. Insert Policy
-drop policy if exists "Users can insert their own campaigns" on public.promotion_campaigns;
-drop policy if exists "Users can create their own campaigns" on public.promotion_campaigns;
+drop policy if exists "Users can insert their own campaigns"
+on public.promotion_campaigns;
+
+drop policy if exists "Users can create their own campaigns"
+on public.promotion_campaigns;
+
 create policy "Users can insert their own campaigns"
-on public.promotion_campaig
+on public.promotion_campaigns
+for insert
+with check (auth.uid() = user_id);
+
+
+drop policy if exists "Users can update their own campaigns"
+on public.promotion_campaigns;
+
+create policy "Users can update their own campaigns"
+on public.promotion_campaigns
+for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+
+drop policy if exists "Users can delete their own campaigns"
+on public.promotion_campaigns;
+
+create policy "Users can delete their own campaigns"
+on public.promotion_campaigns
+for delete
+using (auth.uid() = user_id);

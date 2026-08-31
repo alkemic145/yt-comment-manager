@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   MessageSquare,
   Sparkles,
@@ -107,67 +107,76 @@ export default function CommentsClient() {
   const [postedReplies, setPostedReplies] = useState<Record<string, string>>({});
 
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  // Sequence counter to prevent race conditions from overwriting state
+  const requestSeqRef = useRef<number>(0);
 
-  const loadCommentsPage = useCallback(
-    async (
-      pageNumber: number,
-      append = false,
-      activeFilter: Filter = filter,
-      searchTerm = searchQuery
-    ) => {
-      try {
-        if (append) {
-          setLoadingMore(true);
-        } else {
-          setLoading(true);
-        }
+  async function fetchComments(
+    pageNumber: number,
+    append: boolean,
+    targetFilter: Filter,
+    searchTerm: string
+  ) {
+    const currentSeq = ++requestSeqRef.current;
 
-        setError("");
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      setError("");
 
-        const searchParam = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : "";
-        const response = await fetch(
-          `/api/youtube/comments?page=${pageNumber}&pageSize=20&filter=${activeFilter}${searchParam}`
-        );
+      const searchParam = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : "";
+      const response = await fetch(
+        `/api/youtube/comments?page=${pageNumber}&pageSize=20&filter=${targetFilter}${searchParam}`
+      );
 
-        const data: CommentsResponse = await response.json();
+      const data: CommentsResponse = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Failed to load comments");
-        }
+      // If a newer tab request was made while this one was in flight, ignore this response!
+      if (currentSeq !== requestSeqRef.current) {
+        return;
+      }
 
-        const loadedComments = data.comments ?? [];
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to load comments");
+      }
 
-        setComments((current) =>
-          append ? [...current, ...loadedComments] : loadedComments
-        );
+      const loadedComments = data.comments ?? [];
 
-        setPage(data.page ?? pageNumber);
-        setHasMore(Boolean(data.hasMore));
-        setTotalCount(data.totalCount ?? 0);
-      } catch (err) {
+      setComments((current) =>
+        append ? [...current, ...loadedComments] : loadedComments
+      );
+
+      setPage(data.page ?? pageNumber);
+      setHasMore(Boolean(data.hasMore));
+      setTotalCount(data.totalCount ?? 0);
+    } catch (err) {
+      if (currentSeq === requestSeqRef.current) {
         console.error("Comments page error:", err);
         setError(
           err instanceof Error ? err.message : "Failed to load comments"
         );
-      } finally {
+      }
+    } finally {
+      if (currentSeq === requestSeqRef.current) {
         setLoading(false);
         setLoadingMore(false);
       }
-    },
-    [filter, searchQuery]
-  );
+    }
+  }
 
   function handleFilterChange(newFilter: Filter) {
-    if (newFilter === filter) return;
+    if (newFilter === filter && !loading) return;
     setFilter(newFilter);
     setPage(1);
-    loadCommentsPage(1, false, newFilter, searchQuery);
+    fetchComments(1, false, newFilter, searchQuery);
   }
 
   function handleSearch(term: string) {
     setSearchQuery(term);
     setPage(1);
-    loadCommentsPage(1, false, filter, term);
+    fetchComments(1, false, filter, term);
   }
 
   async function generateReply(comment: YouTubeComment) {
@@ -263,6 +272,7 @@ export default function CommentsClient() {
         [comment.comment_id]: data.replyId ?? "posted",
       }));
 
+      // Update the local comment state
       setComments((current) =>
         current.map((item) => {
           if (item.comment_id !== comment.comment_id) {
@@ -307,7 +317,7 @@ export default function CommentsClient() {
         throw new Error(data.error || "Failed to sync YouTube comments");
       }
 
-      await loadCommentsPage(1, false, filter, searchQuery);
+      await fetchComments(1, false, filter, searchQuery);
     } catch (err) {
       console.error("Comment sync error:", err);
       setError(
@@ -318,9 +328,10 @@ export default function CommentsClient() {
     }
   }
 
+  // Initial load on mount ONLY
   useEffect(() => {
-    loadCommentsPage(1, false, "all", "");
-  }, [loadCommentsPage]);
+    fetchComments(1, false, "all", "");
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -636,7 +647,7 @@ export default function CommentsClient() {
         <div className="mt-6 flex justify-center">
           <button
             type="button"
-            onClick={() => loadCommentsPage(page + 1, true, filter, searchQuery)}
+            onClick={() => fetchComments(page + 1, true, filter, searchQuery)}
             disabled={loadingMore}
             className="rounded-lg border border-ink-800 px-4 py-2 text-xs font-medium text-fog-300 transition hover:border-ink-700 hover:text-paper-50 disabled:opacity-50"
           >
