@@ -1,4 +1,1 @@
-{
-    "path": "/api/automation/schedule",
-    "schedule": "0 9 * * *"
-  }
+{}
