@@ -11,7 +11,7 @@ import { classifyComment, type AutomationDecisionInput } from "@/lib/automation-
 import { persistAutomationDecision } from "@/lib/automation-decision-persistence";
 import { buildAutomationContext } from "@/lib/automation-context";
 
-export const MAX_COMMENTS_PER_RUN = 1;
+export const MAX_COMMENTS_PER_RUN = 5;
 export const MAX_COMMENT_AGE_HOURS = 24;
 
 export interface AutomationProcessResult {
@@ -30,7 +30,7 @@ export async function processAutomationForUser(
 ): Promise<AutomationProcessResult[]> {
   const { data: connection, error: connectionError } = await supabase
     .from("youtube_connections")
-    .select("automation_enabled")
+    .select("automation_enabled, max_comment_age_hours")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -39,6 +39,8 @@ export async function processAutomationForUser(
   if (!connection?.automation_enabled) {
     return [];
   }
+
+  const maxAgeHours = connection.max_comment_age_hours || MAX_COMMENT_AGE_HOURS;
 
   const { data: campaign } = await supabase
     .from("promotion_campaigns")
@@ -51,14 +53,13 @@ export async function processAutomationForUser(
     userId,
     MAX_COMMENTS_PER_RUN,
     15,
-    MAX_COMMENT_AGE_HOURS
+    maxAgeHours
   );
 
   const results: AutomationProcessResult[] = [];
 
   for (const comment of comments) {
     try {
-      // 1. Build rich video & thread context safely
       let decisionInput: AutomationDecisionInput = {
         comment: comment.text ?? "",
       };
@@ -73,10 +74,9 @@ export async function processAutomationForUser(
           decisionInput = autoContext.input;
         }
       } catch {
-        // Fallback gracefully to raw comment if video metadata is temporarily unavailable
+        // Fallback gracefully to comment text if video context is pending
       }
 
-      // 2. Safety gate with video context
       const gate = classifyComment(decisionInput);
 
       await persistAutomationDecision(
@@ -98,13 +98,11 @@ export async function processAutomationForUser(
         continue;
       }
 
-      // 3. Generate grounded reply
       const suggestedReply = await generateReply(
         comment.text ?? "",
         campaign
       );
 
-      // 4. Post to YouTube
       const posted = await postReplyForUser(
         supabase,
         userId,

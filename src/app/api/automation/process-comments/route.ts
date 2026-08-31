@@ -44,13 +44,16 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Automation process error:", error);
-
+  
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to process comments",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to process comments",
       },
       { status: 500 }
     );
   }
-}
+  }

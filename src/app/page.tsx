@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/app-auth";
 import {
   ShieldCheck,
   Sparkles,
@@ -10,10 +12,15 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getCurrentUser();
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-ink-950 text-paper-50 selection:bg-signal-500 selection:text-ink-950">
-      {/* Navigation */}
+      {/* Header */}
       <header className="sticky top-0 z-50 border-b border-ink-800/80 bg-ink-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
@@ -30,7 +37,7 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-4">
             <Link
-              href="/dashboard/comments"
+              href="/dashboard"
               className="text-xs font-medium text-fog-400 transition hover:text-paper-50"
             >
               Dashboard
@@ -46,9 +53,8 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Hero */}
       <section className="relative overflow-hidden pt-20 pb-24 text-center">
-        {/* Glow backdrop effect */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="h-[450px] w-[650px] rounded-full bg-signal-500/10 blur-[130px]" />
         </div>
@@ -81,14 +87,13 @@ export default function LandingPage() {
             </Link>
 
             <Link
-              href="/dashboard/comments"
+              href="/dashboard"
               className="rounded-xl border border-ink-700 bg-ink-900/60 px-6 py-3.5 text-sm font-semibold text-paper-50 transition hover:border-ink-600 hover:bg-ink-800"
             >
               Open Live Dashboard
             </Link>
           </div>
 
-          {/* Social Proof Pills */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs text-fog-500">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-signal-400" /> Zero Hallucination Policy
@@ -103,7 +108,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Feature Showcase Grid */}
+      {/* Feature Grid */}
       <section className="mx-auto max-w-6xl px-6 py-16">
         <div className="text-center mb-12">
           <p className="font-mono text-xs font-semibold uppercase tracking-widest text-signal-400">
@@ -115,8 +120,7 @@ export default function LandingPage() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Card 1 */}
-          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6 transition hover:border-ink-700 hover:bg-ink-900/50">
+          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400 mb-4">
               <ShieldCheck className="h-5 w-5" />
             </div>
@@ -126,8 +130,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Card 2 */}
-          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6 transition hover:border-ink-700 hover:bg-ink-900/50">
+          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 mb-4">
               <Flame className="h-5 w-5" />
             </div>
@@ -137,19 +140,17 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Card 3 */}
-          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6 transition hover:border-ink-700 hover:bg-ink-900/50">
+          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal-500/10 text-signal-400 mb-4">
               <Zap className="h-5 w-5" />
             </div>
-            <h3 className="text-base font-semibold">1-Click Triage & Autonomous Cron</h3>
+            <h3 className="text-base font-semibold">1-Click Triage &amp; Autonomous Cron</h3>
             <p className="mt-2 text-xs leading-relaxed text-fog-400">
               Approve AI drafts with one click, or enable automated background runs that safely post routine appreciation replies.
             </p>
           </div>
 
-          {/* Card 4 */}
-          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6 transition hover:border-ink-700 hover:bg-ink-900/50">
+          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400 mb-4">
               <Megaphone className="h-5 w-5" />
             </div>
@@ -159,8 +160,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Card 5 */}
-          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6 transition hover:border-ink-700 hover:bg-ink-900/50">
+          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 mb-4">
               <CheckCircle2 className="h-5 w-5" />
             </div>
@@ -170,12 +170,11 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Card 6 */}
-          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6 transition hover:border-ink-700 hover:bg-ink-900/50">
+          <div className="rounded-2xl border border-ink-800 bg-ink-900/30 p-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal-500/10 text-signal-400 mb-4">
               <Sparkles className="h-5 w-5" />
             </div>
-            <h3 className="text-base font-semibold">Gemini 3.6 Flash Intelligence</h3>
+            <h3 className="text-base font-semibold">Gemini Flash Intelligence</h3>
             <p className="mt-2 text-xs leading-relaxed text-fog-400">
               Generates warm, human-like, 1-to-2 sentence responses with strict punctuation cleanup and no repetitive openings.
             </p>

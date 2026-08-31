@@ -179,7 +179,7 @@ ${sanitizedComment}
             parts: [{ text: SYSTEM_PROMPT }],
           },
           generationConfig: {
-            maxOutputTokens: 200,
+            maxOutputTokens: 350,
             temperature: 0.7,
           },
           contents: [
