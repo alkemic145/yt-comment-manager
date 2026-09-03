@@ -52,6 +52,8 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || undefined;
 
     const supabase = createSupabaseServerClient();
+    
+    // Pass filter AND search to getCommentsPage
     const result = await getCommentsPage(supabase, user.id, page, pageSize, filter, search);
 
     return NextResponse.json({

@@ -1,35 +1,18 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { siteConfig } from "@/config/site";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
-
-// Fonts are self-hosted (rather than fetched from Google Fonts at runtime)
-// for reliability, performance, and to avoid a third-party network request
-// on every page load.
-const spaceGrotesk = localFont({
-  src: "./fonts/SpaceGrotesk-Variable.ttf",
-  variable: "--font-space-grotesk",
-  weight: "500 700",
-  display: "swap",
-});
 
 const inter = localFont({
   src: "./fonts/Inter-Variable.ttf",
   variable: "--font-inter",
-  weight: "400 600",
-  display: "swap",
-});
-
-const jetbrainsMono = localFont({
-  src: "./fonts/JetBrainsMono-Variable.ttf",
-  variable: "--font-jetbrains-mono",
-  weight: "400 500",
+  weight: "400 500 600 700",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: `${siteConfig.name} — ${siteConfig.tagline}`,
-  description: siteConfig.description,
+  title: "YT Comment Manager — Safe AI Community Management",
+  description: "Automate YouTube comment management safely without hallucinations.",
 };
 
 export default function RootLayout({
@@ -38,11 +21,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth">
-      <body
-        className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
-      >
-        {children}
+    <html
+      lang="en"
+      className="scroll-smooth"
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
+      <body className={`${inter.variable} font-sans antialiased text-slate-900 bg-slate-50 dark:bg-ink-950 dark:text-paper-50 transition-colors duration-200`}>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

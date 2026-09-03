@@ -1,61 +1,33 @@
 @import "tailwindcss";
 
-:root {
-  /* Surfaces */
-  --color-ink-950: #0b0d12; /* page background */
-  --color-ink-900: #12151c; /* card / section surface */
-  --color-ink-800: #1c2029; /* raised surface, borders */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  /* Text */
-  --color-paper-50: #edeef0; /* primary text */
-  --color-fog-400: #8b92a3; /* muted / secondary text */
-
-  /* Accents */
-  --color-signal-500: #ff5a47; /* action needed - replies, alerts */
-  --color-signal-400: #ff7c6c;
-  --color-calm-400: #4fd1c5; /* resolved / organized state */
-  --color-calm-300: #7bdcd3;
-}
-
-@theme inline {
-  --color-ink-950: var(--color-ink-950);
-  --color-ink-900: var(--color-ink-900);
-  --color-ink-800: var(--color-ink-800);
-  --color-paper-50: var(--color-paper-50);
-  --color-fog-400: var(--color-fog-400);
-  --color-signal-500: var(--color-signal-500);
-  --color-signal-400: var(--color-signal-400);
-  --color-calm-400: var(--color-calm-400);
-  --color-calm-300: var(--color-calm-300);
-
-  --font-display: var(--font-space-grotesk);
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-jetbrains-mono);
-}
-
-body {
-  background: var(--color-ink-950);
-  color: var(--color-paper-50);
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
+@layer base {
+  :root {
+    --yt-bg: #f9f9f9;
+    --yt-card: #ffffff;
+    --yt-border: #e5e5e5;
+    --yt-text-primary: #0f0f0f;
+    --yt-text-secondary: #606060;
+    --yt-text-muted: #909090;
+    --yt-chip-bg: #f2f2f2;
+    --yt-chip-hover: #e5e5e5;
+    --yt-brand: #cc0000;
+    --yt-blue: #065fd4;
+    --yt-blue-hover: #0556bf;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  .dark {
+    --yt-bg: #0f0f0f;
+    --yt-card: #181818;
+    --yt-border: #272727;
+    --yt-text-primary: #f1f1f1;
+    --yt-text-secondary: #aaaaaa;
+    --yt-text-muted: #717171;
+    --yt-chip-bg: #222222;
+    --yt-chip-hover: #2e2e2e;
+    --yt-brand: #ff0000;
+    --yt-blue: #3ea6ff;
+    --yt-blue-hover: #65b8ff;
   }
 }
