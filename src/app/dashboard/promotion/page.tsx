@@ -14,6 +14,8 @@ import {
   XCircle,
   Play,
   RotateCw,
+  Video,
+  Send,
 } from "lucide-react";
 
 type Campaign = {
@@ -38,7 +40,7 @@ type PromotedComment = {
 
 const defaultCampaign: Campaign = {
   title: "",
-  promotion_type: "product",
+  promotion_type: "video",
   description: "",
   call_to_action: "",
   target_url: "",
@@ -93,7 +95,7 @@ export default function PromotionPage() {
         if (campaignData.campaign) {
           setCampaign({
             title: campaignData.campaign.title ?? "",
-            promotion_type: campaignData.campaign.promotion_type ?? "product",
+            promotion_type: campaignData.campaign.promotion_type ?? "video",
             description: campaignData.campaign.description ?? "",
             call_to_action: campaignData.campaign.call_to_action ?? "",
             target_url: campaignData.campaign.target_url ?? "",
@@ -184,112 +186,118 @@ export default function PromotionPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-fog-400">
-        <p className="text-xs">Loading campaign and intelligence...</p>
+      <div className="flex h-64 items-center justify-center text-[#606060] dark:text-[#aaaaaa]">
+        <p className="text-xs">Loading campaign intelligence...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      {/* Header */}
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Studio Page Header */}
       <div>
-        <div className="flex items-center gap-2">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-signal-400">
-            Creator Intelligence
-          </p>
-          <span className="rounded bg-signal-500/10 px-1.5 py-0.5 text-[9px] font-medium text-signal-300">
-            Contextual Promotion
-          </span>
-        </div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-          Promote Yourself &amp; Activity Tracker
+        <h1 className="text-xl font-bold tracking-tight text-[#0f0f0f] dark:text-[#f1f1f1]">
+          Promote Yourself
         </h1>
-        <p className="mt-1 text-xs text-fog-400">
-          Set up your offer (course, product, service). The AI will mention it <strong>only</strong> when a commenter asks a directly relevant question.
+        <p className="text-xs text-[#606060] dark:text-[#aaaaaa] mt-0.5">
+          Configure a video, course, or offer. The AI mentions it <strong>only</strong> when a commenter asks a directly relevant question.
         </p>
       </div>
 
       {/* Top Metrics Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-ink-800 bg-ink-900/30 p-5">
-          <div className="flex items-center gap-2 text-fog-400 text-xs font-medium">
-            <Megaphone className="h-4 w-4 text-signal-400" />
-            Campaign Status
+        <div className="rounded-xl border border-[#e5e5e5] bg-white p-5 shadow-sm dark:border-[#282828] dark:bg-[#181818] transition-colors duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#909090] dark:text-[#aaaaaa]">
+              Campaign Status
+            </span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400">
+              <Megaphone className="h-4 w-4" />
+            </div>
           </div>
-          <p className="mt-2 text-xl font-semibold">
+          <p className="mt-3 text-xl font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
             {campaign.enabled ? (
-              <span className="text-signal-300 flex items-center gap-1.5 text-sm font-bold">
-                <span className="h-2 w-2 rounded-full bg-signal-400 animate-pulse" />
-                Active
+              <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 text-sm font-bold">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Active &amp; Ready
               </span>
             ) : (
-              <span className="text-fog-500 text-sm">Paused</span>
+              <span className="text-[#909090] text-sm">Paused</span>
             )}
           </p>
-          <p className="mt-1 text-[11px] text-fog-500 truncate">
-            {campaign.title || "No title set"}
+          <p className="mt-1 text-xs text-[#606060] dark:text-[#aaaaaa] truncate">
+            {campaign.title || "No title configured"}
           </p>
         </div>
 
-        <div className="rounded-xl border border-ink-800 bg-ink-900/30 p-5">
-          <div className="flex items-center gap-2 text-fog-400 text-xs font-medium">
-            <Flame className="h-4 w-4 text-amber-400" />
-            Promoted Replies Sent
+        <div className="rounded-xl border border-[#e5e5e5] bg-white p-5 shadow-sm dark:border-[#282828] dark:bg-[#181818] transition-colors duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#909090] dark:text-[#aaaaaa]">
+              Promoted Replies Sent
+            </span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400">
+              <Flame className="h-4 w-4" />
+            </div>
           </div>
-          <p className="mt-2 text-2xl font-semibold text-paper-50">
+          <p className="mt-3 text-2xl font-bold tracking-tight text-[#0f0f0f] dark:text-[#f1f1f1]">
             {history.length}
           </p>
-          <p className="mt-1 text-[11px] text-fog-500">
-            Comments where the AI recommended your offer
+          <p className="mt-1 text-xs text-[#606060] dark:text-[#aaaaaa]">
+            Real replies where AI shared your link
           </p>
         </div>
 
-        <div className="rounded-xl border border-ink-800 bg-ink-900/30 p-5">
-          <div className="flex items-center gap-2 text-fog-400 text-xs font-medium">
-            <ExternalLink className="h-4 w-4 text-calm-400" />
-            Target Offer Link
+        <div className="rounded-xl border border-[#e5e5e5] bg-white p-5 shadow-sm dark:border-[#282828] dark:bg-[#181818] transition-colors duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#909090] dark:text-[#aaaaaa]">
+              Target Link
+            </span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+              <ExternalLink className="h-4 w-4" />
+            </div>
           </div>
-          <p className="mt-2 text-xs font-mono text-paper-50 truncate">
-            {campaign.target_url || "No URL set"}
+          <p className="mt-3 text-xs font-mono text-[#0f0f0f] dark:text-[#f1f1f1] truncate">
+            {campaign.target_url || "No link entered"}
           </p>
-          <p className="mt-1 text-[11px] text-fog-500">
-            Shared automatically when relevant
+          <p className="mt-1 text-xs text-[#606060] dark:text-[#aaaaaa]">
+            Shared when relevant
           </p>
         </div>
       </div>
 
       {/* Section 1: Campaign Configuration Form */}
-      <div className="rounded-xl border border-ink-800 bg-ink-900/20 p-6">
+      <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm dark:border-[#282828] dark:bg-[#181818] transition-colors duration-150">
         <div className="flex items-center gap-2 mb-4">
-          <Megaphone className="h-4 w-4 text-signal-400" />
-          <h2 className="text-sm font-semibold">1. Campaign Configuration</h2>
+          <Megaphone className="h-4 w-4 text-red-600 dark:text-red-400" />
+          <h2 className="text-sm font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
+            1. Campaign Setup
+          </h2>
         </div>
 
         <form onSubmit={saveCampaign} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-fog-300 mb-1.5">
+              <label className="block text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1] mb-1.5">
                 Campaign Title
               </label>
               <input
                 type="text"
                 required
-                className="w-full rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-sm text-paper-50 outline-none focus:border-signal-500/50"
+                className="w-full rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2 text-sm text-[#0f0f0f] dark:border-[#282828] dark:bg-[#121212] dark:text-[#f1f1f1] outline-none focus:border-red-600 shadow-sm"
                 value={campaign.title}
                 onChange={(e) =>
                   setCampaign({ ...campaign, title: e.target.value })
                 }
-                placeholder="e.g., Complete Video Editing Bootcamp"
+                placeholder="e.g., Next Travel Vlog / Editing Masterclass"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-fog-300 mb-1.5">
+              <label className="block text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1] mb-1.5">
                 Promotion Type
               </label>
               <select
-                className="w-full rounded-lg border border-ink-800 bg-ink-950 px-3 py-2 text-sm text-paper-50 outline-none focus:border-signal-500/50"
+                className="w-full rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2 text-sm text-[#0f0f0f] dark:border-[#282828] dark:bg-[#121212] dark:text-[#f1f1f1] outline-none focus:border-red-600 shadow-sm"
                 value={campaign.promotion_type}
                 onChange={(e) =>
                   setCampaign({
@@ -298,10 +306,10 @@ export default function PromotionPage() {
                   })
                 }
               >
-                <option value="product">Product</option>
-                <option value="service">Service</option>
-                <option value="course">Course</option>
-                <option value="video">Featured Video</option>
+                <option value="video">Featured Video (Recommended for Growth)</option>
+                <option value="course">Course / Masterclass</option>
+                <option value="product">Product / Merch</option>
+                <option value="service">Service / Consulting</option>
                 <option value="website">Website / Newsletter</option>
                 <option value="other">Other Offer</option>
               </select>
@@ -309,13 +317,13 @@ export default function PromotionPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-fog-300 mb-1.5">
-              Offer Description (What does it do &amp; who is it for?)
+            <label className="block text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1] mb-1.5">
+              Offer Description (What does it offer &amp; who is it for?)
             </label>
             <textarea
               rows={3}
               required
-              className="w-full resize-none rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-sm text-paper-50 outline-none focus:border-signal-500/50"
+              className="w-full resize-none rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2 text-sm text-[#0f0f0f] dark:border-[#282828] dark:bg-[#121212] dark:text-[#f1f1f1] outline-none focus:border-red-600 shadow-sm"
               value={campaign.description}
               onChange={(e) =>
                 setCampaign({
@@ -323,18 +331,18 @@ export default function PromotionPage() {
                   description: e.target.value,
                 })
               }
-              placeholder="Describe your offer in 2-3 sentences. The AI uses this to understand when it's genuinely relevant."
+              placeholder="Describe your offer in 1-2 sentences so the AI knows when it's genuinely relevant to recommend."
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-fog-300 mb-1.5">
+              <label className="block text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1] mb-1.5">
                 Call to Action (CTA)
               </label>
               <input
                 type="text"
-                className="w-full rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-sm text-paper-50 outline-none focus:border-signal-500/50"
+                className="w-full rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2 text-sm text-[#0f0f0f] dark:border-[#282828] dark:bg-[#121212] dark:text-[#f1f1f1] outline-none focus:border-red-600 shadow-sm"
                 value={campaign.call_to_action}
                 onChange={(e) =>
                   setCampaign({
@@ -342,17 +350,17 @@ export default function PromotionPage() {
                     call_to_action: e.target.value,
                   })
                 }
-                placeholder="e.g., Check out the curriculum"
+                placeholder="e.g., Check out the next episode here"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-fog-300 mb-1.5">
-                Target Offer URL
+              <label className="block text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1] mb-1.5">
+                Target Link / URL
               </label>
               <input
-                type="url"
-                className="w-full rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-sm text-paper-50 outline-none focus:border-signal-500/50"
+                type="text"
+                className="w-full rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2 text-sm text-[#0f0f0f] dark:border-[#282828] dark:bg-[#121212] dark:text-[#f1f1f1] outline-none focus:border-red-600 shadow-sm"
                 value={campaign.target_url}
                 onChange={(e) =>
                   setCampaign({
@@ -360,16 +368,16 @@ export default function PromotionPage() {
                     target_url: e.target.value,
                   })
                 }
-                placeholder="https://yourwebsite.com/offer"
+                placeholder="https://youtube.com/watch?v=..."
               />
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-between">
-            <label className="flex items-center gap-2.5 cursor-pointer">
+          <div className="pt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-ink-700 bg-ink-950 text-signal-500 focus:ring-signal-500/20"
+                className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                 checked={campaign.enabled}
                 onChange={(e) =>
                   setCampaign({
@@ -378,7 +386,7 @@ export default function PromotionPage() {
                   })
                 }
               />
-              <span className="text-xs font-medium text-fog-300">
+              <span className="text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
                 Enable campaign for AI suggestions
               </span>
             </label>
@@ -386,7 +394,7 @@ export default function PromotionPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 rounded-lg bg-signal-500 px-5 py-2.5 text-xs font-semibold text-ink-950 transition hover:bg-signal-400 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-lg bg-red-600 text-white px-5 py-2.5 text-xs font-semibold shadow-sm transition hover:bg-red-700 disabled:opacity-50"
             >
               <Megaphone className="h-3.5 w-3.5" />
               {saving ? "Saving Campaign..." : "Save Campaign"}
@@ -394,14 +402,14 @@ export default function PromotionPage() {
           </div>
 
           {success && (
-            <div className="flex items-center gap-2 rounded-lg border border-signal-500/30 bg-signal-500/10 px-3.5 py-2 text-xs text-signal-300">
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
               <CheckCircle2 className="h-4 w-4" />
               {success}
             </div>
           )}
 
           {error && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs text-red-300">
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
               <AlertCircle className="h-4 w-4" />
               {error}
             </div>
@@ -410,62 +418,53 @@ export default function PromotionPage() {
       </div>
 
       {/* Section 2: Live AI Promotion Simulator */}
-      <div className="rounded-xl border border-signal-500/20 bg-signal-500/5 p-6">
+      <div className="rounded-xl border border-red-200 bg-red-50/30 p-6 shadow-sm dark:border-red-950/60 dark:bg-red-950/10 transition-colors duration-150">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-signal-400" />
-            <h2 className="text-sm font-semibold">2. Live AI Promotion Simulator</h2>
+            <Sparkles className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <h2 className="text-sm font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
+              2. Live AI Promotion Simulator
+            </h2>
           </div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-fog-500">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 dark:text-red-400">
             Interactive Test
           </span>
         </div>
 
-        <p className="text-xs text-fog-400 mb-4">
+        <p className="text-xs text-[#606060] dark:text-[#aaaaaa] mb-4">
           Test how the AI decides whether or not to include your link. Click a sample comment below or type your own:
         </p>
 
-        {/* Quick preset chips */}
+        {/* Preset Chips */}
         <div className="flex flex-wrap gap-2 mb-3">
           <button
             type="button"
             onClick={() => {
-              setTestComment("Where can I learn video editing from you? Do you have a course?");
-              runSimulation("Where can I learn video editing from you? Do you have a course?");
+              setTestComment("Awesome video! Loved this so much.");
+              runSimulation("Awesome video! Loved this so much.");
             }}
-            className="rounded-md border border-ink-800 bg-ink-950 px-2.5 py-1 text-[11px] text-fog-300 transition hover:border-signal-500/40 hover:text-signal-300"
+            className="rounded-full border border-[#e5e5e5] bg-white px-3 py-1 text-[11px] font-medium text-[#0f0f0f] dark:border-[#282828] dark:bg-[#181818] dark:text-[#f1f1f1] hover:border-red-500 shadow-sm"
           >
-            💬 &quot;Do you have a course?&quot; (Relevant)
+            💬 &quot;Awesome video!&quot; (Praise test)
           </button>
 
           <button
             type="button"
             onClick={() => {
-              setTestComment("Awesome video! Loved the camera angles.");
-              runSimulation("Awesome video! Loved the camera angles.");
+              setTestComment("Where can I learn more or find the next part?");
+              runSimulation("Where can I learn more or find the next part?");
             }}
-            className="rounded-md border border-ink-800 bg-ink-950 px-2.5 py-1 text-[11px] text-fog-300 transition hover:border-signal-500/40 hover:text-signal-300"
+            className="rounded-full border border-[#e5e5e5] bg-white px-3 py-1 text-[11px] font-medium text-[#0f0f0f] dark:border-[#282828] dark:bg-[#181818] dark:text-[#f1f1f1] hover:border-red-500 shadow-sm"
           >
-            💬 &quot;Awesome video!&quot; (Unrelated)
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTestComment("Where can I buy or check this out?");
-              runSimulation("Where can I buy or check this out?");
-            }}
-            className="rounded-md border border-ink-800 bg-ink-950 px-2.5 py-1 text-[11px] text-fog-300 transition hover:border-signal-500/40 hover:text-signal-300"
-          >
-            💬 &quot;Where can I buy this?&quot; (Relevant)
+            💬 &quot;Where can I find next part?&quot; (Direct interest)
           </button>
         </div>
 
         <div className="flex gap-2">
           <input
             type="text"
-            className="flex-1 rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-sm text-paper-50 outline-none focus:border-signal-500/50"
-            placeholder="Type any viewer comment to test..."
+            className="flex-1 rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2 text-sm text-[#0f0f0f] dark:border-[#282828] dark:bg-[#121212] dark:text-[#f1f1f1] outline-none focus:border-red-600 shadow-sm"
+            placeholder="Type any test comment to simulate..."
             value={testComment}
             onChange={(e) => setTestComment(e.target.value)}
             onKeyDown={(e) => {
@@ -480,43 +479,43 @@ export default function PromotionPage() {
             type="button"
             onClick={() => runSimulation(testComment)}
             disabled={simulating || !testComment.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-signal-500 px-4 py-2 text-xs font-semibold text-ink-950 transition hover:bg-signal-400 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 text-white px-4 py-2 text-xs font-semibold shadow-sm transition hover:bg-red-700 disabled:opacity-50"
           >
             {simulating ? (
-              <RotateCw className="h-3.5 w-3.5 animate-spin text-signal-400" />
+              <RotateCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Play className="h-3.5 w-3.5" />
             )}
-            {simulating ? "Simulating..." : "Test AI"}
+            {simulating ? "Testing..." : "Test AI"}
           </button>
         </div>
 
         {simError && (
-          <p className="mt-3 text-xs text-red-300">{simError}</p>
+          <p className="mt-3 text-xs text-red-600 dark:text-red-400">{simError}</p>
         )}
 
         {simResult && (
-          <div className="mt-4 rounded-lg border border-ink-800 bg-ink-950 p-4">
+          <div className="mt-4 rounded-lg border border-[#e5e5e5] bg-white p-4 shadow-sm dark:border-[#282828] dark:bg-[#121212]">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-signal-400" />
-                <span className="text-xs font-semibold text-paper-50">
-                  Simulated AI Reply
+                <Bot className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <span className="text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
+                  Simulated AI Response
                 </span>
               </div>
 
               {simResult.includedPromotion ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-signal-500/40 bg-signal-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-signal-300">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-300">
                   <Check className="h-3 w-3" /> Promotion Included
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full border border-fog-700 bg-ink-900 px-2.5 py-0.5 text-[10px] font-medium text-fog-400">
-                  <XCircle className="h-3 w-3" /> No Promotion (Natural Reply)
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-[#606060] dark:border-[#282828] dark:bg-[#181818] dark:text-[#aaaaaa]">
+                  <XCircle className="h-3 w-3" /> Natural Reply (No Promo)
                 </span>
               )}
             </div>
 
-            <p className="text-sm text-paper-50 leading-relaxed font-sans bg-ink-900/40 p-3 rounded-md border border-ink-800/80">
+            <p className="text-sm text-[#0f0f0f] dark:text-[#f1f1f1] leading-relaxed bg-[#f9f9f9] dark:bg-[#181818] p-3 rounded-md border border-[#e5e5e5] dark:border-[#282828]">
               &ldquo;{simResult.reply}&rdquo;
             </p>
           </div>
@@ -524,69 +523,69 @@ export default function PromotionPage() {
       </div>
 
       {/* Section 3: Promoted Comments Activity Feed */}
-      <div className="rounded-xl border border-ink-800 bg-ink-900/20 p-6">
+      <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm dark:border-[#282828] dark:bg-[#181818] transition-colors duration-150">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Flame className="h-4 w-4 text-amber-400" />
-            <h2 className="text-sm font-semibold">
+            <Flame className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <h2 className="text-sm font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
               3. Promoted Comments Feed ({history.length})
             </h2>
           </div>
-          <span className="text-[10px] text-fog-500">
-            Live YouTube replies that included your offer
+          <span className="text-[11px] text-[#606060] dark:text-[#aaaaaa]">
+            Real YouTube replies containing your campaign
           </span>
         </div>
 
         {loadingHistory && (
-          <div className="p-8 text-center text-xs text-fog-500">
+          <div className="p-8 text-center text-xs text-[#606060] dark:text-[#aaaaaa]">
             Loading campaign replies...
           </div>
         )}
 
         {!loadingHistory && history.length === 0 && (
-          <div className="rounded-lg border border-ink-800/60 bg-ink-950/40 p-8 text-center">
-            <MessageSquare className="mx-auto h-7 w-7 text-fog-600 mb-2" />
-            <p className="text-xs font-medium text-fog-300">
+          <div className="rounded-lg border border-[#e5e5e5] bg-[#f9f9f9] p-8 text-center dark:border-[#282828] dark:bg-[#121212]">
+            <MessageSquare className="mx-auto h-7 w-7 text-[#909090] dark:text-[#717171] mb-2" />
+            <p className="text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
               No promoted replies sent yet
             </p>
-            <p className="text-[11px] text-fog-500 mt-1 max-w-sm mx-auto">
-              When a YouTube viewer leaves a comment asking about your offer, the AI will naturally share your link and record the interaction here.
+            <p className="text-[11px] text-[#606060] dark:text-[#aaaaaa] mt-1 max-w-sm mx-auto">
+              When a YouTube viewer asks a relevant question, the AI will naturally share your link and record the interaction here.
             </p>
           </div>
         )}
 
         {!loadingHistory && history.length > 0 && (
-          <div className="divide-y divide-ink-800 rounded-lg border border-ink-800 bg-ink-950">
+          <div className="divide-y divide-[#e5e5e5] rounded-lg border border-[#e5e5e5] bg-[#f9f9f9] dark:divide-[#282828] dark:border-[#282828] dark:bg-[#121212]">
             {history.map((item) => (
               <div key={item.comment_id} className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-800 font-mono text-[10px] font-bold text-fog-300">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#e5e5e5] text-[#0f0f0f] font-bold text-[10px] dark:bg-[#282828] dark:text-[#f1f1f1]">
                       {(item.author || "?").charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-mono text-xs text-fog-200">
+                    <span className="text-xs font-bold text-[#0f0f0f] dark:text-[#f1f1f1]">
                       {item.author || "Anonymous"}
                     </span>
-                    <span className="text-[10px] text-fog-600">
+                    <span className="text-[10px] text-[#909090] dark:text-[#717171]">
                       · {formatRelativeTime(item.replied_at || item.published_at)}
                     </span>
                   </div>
 
-                  <span className="inline-flex items-center gap-1 rounded bg-signal-500/10 px-2 py-0.5 text-[9px] font-semibold text-signal-300">
+                  <span className="inline-flex items-center gap-1 rounded bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300 px-2 py-0.5 text-[9px] font-bold">
                     <Megaphone className="h-2.5 w-2.5" /> Campaign Sent
                   </span>
                 </div>
 
-                <p className="text-xs text-paper-50 bg-ink-900/30 p-2.5 rounded border border-ink-800/50">
-                  <span className="text-fog-500 font-mono text-[10px] block mb-0.5">
+                <p className="text-xs text-[#0f0f0f] dark:text-[#f1f1f1] bg-white dark:bg-[#181818] p-2.5 rounded border border-[#e5e5e5] dark:border-[#282828]">
+                  <span className="text-[#606060] dark:text-[#aaaaaa] text-[10px] block mb-0.5 font-semibold">
                     Viewer Comment:
                   </span>
                   &ldquo;{item.text}&rdquo;
                 </p>
 
-                <p className="text-xs text-signal-200 bg-signal-500/5 p-2.5 rounded border border-signal-500/20">
-                  <span className="text-signal-400 font-mono text-[10px] block mb-0.5 font-bold">
-                    AI Reply with Offer:
+                <p className="text-xs text-red-950 dark:text-red-200 bg-red-50/60 dark:bg-red-950/30 p-2.5 rounded border border-red-200 dark:border-red-900/40">
+                  <span className="text-red-700 dark:text-red-400 text-[10px] block mb-0.5 font-bold">
+                    Published Reply with Link:
                   </span>
                   {item.reply_text}
                 </p>
