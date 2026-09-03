@@ -107,7 +107,7 @@ export default function CommentsClient() {
   const [aiReplies, setAiReplies] = useState<Record<string, string>>({});
   const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
   const [replyErrors, setReplyErrors] = useState<Record<string, string>>({});
-  const [postedReplies, setPostedReplies] = useState<Record<string, string>>({});
+  const [, setPostedReplies] = useState<Record<string, string>>({});
 
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const requestSeqRef = useRef<number>(0);

@@ -14,8 +14,6 @@ import {
   XCircle,
   Play,
   RotateCw,
-  Video,
-  Send,
 } from "lucide-react";
 
 type Campaign = {

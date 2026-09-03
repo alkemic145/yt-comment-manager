@@ -4,8 +4,6 @@ const MAX_PROMOTION_TITLE_LENGTH = 200;
 const MAX_PROMOTION_TYPE_LENGTH = 50;
 const MAX_PROMOTION_DESCRIPTION_LENGTH = 2000;
 const MAX_PROMOTION_CTA_LENGTH = 200;
-const MAX_PROMOTION_URL_LENGTH = 2048;
-
 export type PromotionCampaign = {
   title: string;
   promotion_type: string;

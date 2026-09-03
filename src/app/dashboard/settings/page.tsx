@@ -8,7 +8,6 @@ import {
   Clock,
   Save,
   Flame,
-  MessageSquare,
 } from "lucide-react";
 
 type SettingsData = {
@@ -32,7 +31,6 @@ type YouTubeComment = {
 export default function SettingsPage() {
   const [enabled, setEnabled] = useState(false);
   const [maxAgeHours, setMaxAgeHours] = useState<number>(8760);
-  const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [comments, setComments] = useState<YouTubeComment[]>([]);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -55,9 +53,6 @@ export default function SettingsPage() {
           setEnabled(settingsData.automation_enabled);
           if (settingsData.max_comment_age_hours !== undefined) {
             setMaxAgeHours(settingsData.max_comment_age_hours);
-          }
-          if (settingsData.channel?.title) {
-            setChannelTitle(settingsData.channel.title);
           }
         }
 

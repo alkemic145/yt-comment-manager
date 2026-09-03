@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+// Remove ShieldCheck from import:
 import {
   ChevronDown,
   Flame,
@@ -11,7 +12,6 @@ import {
   Sparkles,
   UserCheck,
   Zap,
-  ShieldCheck,
   CheckCircle2,
 } from "lucide-react";
 
